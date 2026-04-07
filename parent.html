@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EduManager — Espace Parent</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f0eb; color: #1a1a1a; }
+    .app { display: flex; height: 100vh; }
+    .sidebar { width: 230px; background: #0f3d2e; display: flex; flex-direction: column; flex-shrink: 0; }
+    .sidebar-logo { padding: 20px 16px; border-bottom: 1px solid #ffffff15; }
+    .logo-title { font-size: 15px; font-weight: 700; color: #fff; }
+    .logo-school { font-size: 12px; color: #ffffff70; margin-top: 3px; }
+    .logo-badge { display: inline-block; margin-top: 6px; font-size: 10px; padding: 2px 8px; border-radius: 20px; background: #1D9E7530; color: #5DCAA5; border: 1px solid #1D9E7550; font-weight: 600; }
+    .nav { flex: 1; padding: 10px 0; overflow-y: auto; }
+    .nav-section { padding: 10px 16px 4px; font-size: 9px; color: #ffffff35; text-transform: uppercase; letter-spacing: 0.08em; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; cursor: pointer; font-size: 13px; color: #ffffff70; transition: all 0.15s; border-left: 2px solid transparent; }
+    .nav-item:hover { background: #ffffff08; color: #ffffffcc; }
+    .nav-item.active { background: #ffffff12; color: #fff; border-left-color: #1D9E75; font-weight: 500; }
+    .nav-icon { font-size: 15px; width: 20px; text-align: center; }
+    .sidebar-user { padding: 14px 16px; border-top: 1px solid #ffffff15; display: flex; align-items: center; gap: 10px; }
+    .user-avatar { width: 32px; height: 32px; border-radius: 50%; background: #1D9E7540; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #5DCAA5; flex-shrink: 0; }
+    .user-name { font-size: 13px; font-weight: 500; color: #fff; }
+    .user-role { font-size: 10px; color: #5DCAA5; }
+    .logout-btn { margin-left: auto; cursor: pointer; opacity: 0.5; color: #fff; background: none; border: none; font-size: 16px; }
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .topbar { background: #fff; border-bottom: 1px solid #e8e8e8; padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .topbar-title { font-size: 15px; font-weight: 600; }
+    .topbar-sub { font-size: 11px; color: #aaa; margin-top: 1px; }
+    .btn { padding: 7px 14px; border-radius: 8px; font-size: 13px; cursor: pointer; border: 1px solid #ddd; background: #fff; color: #1a1a1a; font-family: inherit; }
+    .btn-primary { background: #0f6e56; color: #fff; border-color: #0f6e56; font-weight: 500; }
+    .btn-sm { padding: 4px 10px; font-size: 11px; border-radius: 6px; cursor: pointer; border: 1px solid #ddd; background: #fff; font-family: inherit; }
+    .content { flex: 1; overflow-y: auto; padding: 24px; }
+    .page { display: none; }
+    .page.active { display: block; }
+    .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
+    .stat-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 12px; padding: 16px; position: relative; overflow: hidden; }
+    .stat-accent { position: absolute; top: 0; left: 0; right: 0; height: 3px; border-radius: 12px 12px 0 0; }
+    .stat-label { font-size: 12px; color: #999; margin-bottom: 6px; }
+    .stat-value { font-size: 26px; font-weight: 700; }
+    .stat-change { font-size: 11px; margin-top: 4px; color: #888; }
+    .grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 16px; }
+    .card { background: #fff; border: 1px solid #e8e8e8; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    .card-title { font-size: 14px; font-weight: 600; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+    .card-link { font-size: 12px; color: #0f6e56; cursor: pointer; font-weight: 400; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead tr { border-bottom: 1px solid #e8e8e8; }
+    th { padding: 8px 0; font-weight: 500; color: #999; text-align: left; font-size: 11px; text-transform: uppercase; }
+    td { padding: 10px 0; border-bottom: 1px solid #f5f5f0; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    .badge { font-size: 10px; padding: 3px 8px; border-radius: 20px; font-weight: 500; }
+    .badge-ok { background: #EAF3DE; color: #3B6D11; }
+    .badge-warn { background: #FAEEDA; color: #633806; }
+    .badge-err { background: #FCEBEB; color: #791F1F; }
+    .badge-info { background: #E6F1FB; color: #0C447C; }
+    .loading { text-align: center; padding: 28px; color: #aaa; font-size: 13px; }
+    .spinner { width: 26px; height: 26px; border: 3px solid #e8e8e8; border-top-color: #0f6e56; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 10px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .empty { text-align: center; padding: 28px; color: #aaa; }
+    .empty-icon { font-size: 32px; margin-bottom: 8px; }
+    .note-high { color: #3B6D11; font-weight: 700; }
+    .note-mid { color: #185FA5; font-weight: 700; }
+    .note-low { color: #A32D2D; font-weight: 700; }
+    .enfant-card { background: linear-gradient(135deg, #0f3d2e, #1D9E75); border-radius: 14px; padding: 20px; color: #fff; margin-bottom: 16px; }
+    .signal-form { background: #FCEBEB; border: 1px solid #F09595; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+    .field { margin-bottom: 12px; }
+    .field label { font-size: 12px; color: #888; display: block; margin-bottom: 4px; }
+    .field input, .field select, .field textarea { width: 100%; padding: 9px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; font-family: inherit; outline: none; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <div class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-title">EduManager 🇬🇳</div>
+      <div class="logo-school" id="school-name">Chargement...</div>
+      <div class="logo-badge">Espace Parent</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-section">Mon espace</div>
+      <div class="nav-item active" onclick="showPage('dashboard',this)"><span class="nav-icon">🏠</span> Accueil</div>
+      <div class="nav-item" onclick="showPage('enfants',this)"><span class="nav-icon">👧</span> Mes enfants</div>
+      <div class="nav-item" onclick="showPage('notes',this)"><span class="nav-icon">📊</span> Notes & moyennes</div>
+      <div class="nav-item" onclick="showPage('absences',this)"><span class="nav-icon">📌</span> Absences</div>
+      <div class="nav-item" onclick="showPage('bulletins',this)"><span class="nav-icon">📄</span> Bulletins</div>
+      <div class="nav-section">Communication</div>
+      <div class="nav-item" onclick="showPage('annonces',this)"><span class="nav-icon">📢</span> Annonces école</div>
+      <div class="nav-item" onclick="showPage('messagerie',this)"><span class="nav-icon">✉️</span> Messagerie</div>
+      <div class="nav-section">Inscription</div>
+      <div class="nav-item" onclick="showPage('preinscription',this)"><span class="nav-icon">📋</span> Pré-inscription</div>
+      <div class="nav-item" onclick="showPage('signalement',this)"><span class="nav-icon">🚨</span> Signalement</div>
+    </nav>
+    <div class="sidebar-user">
+      <div class="user-avatar" id="user-initials">--</div>
+      <div>
+        <div class="user-name" id="user-name">Chargement...</div>
+        <div class="user-role">Parent</div>
+      </div>
+      <button class="logout-btn" onclick="logout()">⏻</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <div class="topbar-title" id="page-title">Accueil</div>
+        <div class="topbar-sub" id="page-sub">Bienvenue</div>
+      </div>
+      <button class="btn btn-primary" onclick="showPage('messagerie',null)">✉️ Contacter l'école</button>
+    </div>
+
+    <div class="content">
+
+      <!-- DASHBOARD -->
+      <div class="page active" id="page-dashboard">
+        <div id="load-dash" class="loading"><div class="spinner"></div>Chargement...</div>
+        <div id="cont-dash" style="display:none">
+          <div class="stats-grid">
+            <div class="stat-card"><div class="stat-accent" style="background:#1D9E75"></div><div class="stat-label">Mes enfants suivis</div><div class="stat-value" id="d-enfants">0</div><div class="stat-change">Sur cette école</div></div>
+            <div class="stat-card"><div class="stat-accent" style="background:#EF9F27"></div><div class="stat-label">Absences non justifiées</div><div class="stat-value" id="d-absences">0</div><div class="stat-change">À régulariser</div></div>
+            <div class="stat-card"><div class="stat-accent" style="background:#185FA5"></div><div class="stat-label">Annonces non lues</div><div class="stat-value" id="d-annonces">0</div><div class="stat-change">De l'école</div></div>
+          </div>
+          <div id="enfants-cards"></div>
+          <div class="card">
+            <div class="card-title">Annonces récentes <span class="card-link" onclick="showPage('annonces',null)">Voir toutes →</span></div>
+            <div id="annonces-dash"><div class="loading">Chargement...</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MES ENFANTS -->
+      <div class="page" id="page-enfants">
+        <div id="load-enfants" class="loading"><div class="spinner"></div>Chargement...</div>
+        <div id="cont-enfants"></div>
+        <div class="card" style="border:1px dashed #ddd;text-align:center;padding:24px;cursor:pointer" onclick="showPage('preinscription',null)">
+          <div style="font-size:28px;margin-bottom:8px">➕</div>
+          <div style="font-size:13px;color:#888">Inscrire un autre enfant</div>
+        </div>
+      </div>
+
+      <!-- NOTES -->
+      <div class="page" id="page-notes">
+        <div id="load-notes" class="loading"><div class="spinner"></div>Chargement...</div>
+        <div id="cont-notes"></div>
+      </div>
+
+      <!-- ABSENCES -->
+      <div class="page" id="page-absences">
+        <div id="load-absences" class="loading"><div class="spinner"></div>Chargement...</div>
+        <div class="card" id="cont-absences" style="display:none">
+          <table>
+            <thead><tr><th>Enfant</th><th>Date</th><th>Période</th><th>Statut</th></tr></thead>
+            <tbody id="tbody-absences"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- BULLETINS -->
+      <div class="page" id="page-bulletins">
+        <div id="load-bulletins" class="loading"><div class="spinner"></div>Chargement...</div>
+        <div id="cont-bulletins"></div>
+      </div>
+
+      <!-- ANNONCES -->
+      <div class="page" id="page-annonces">
+        <div id="load-annonces" class="loading"><div class="spinner"></div>Chargement...</div>
+        <div id="cont-annonces"></div>
+      </div>
+
+      <!-- MESSAGERIE -->
+      <div class="page" id="page-messagerie">
+        <div class="card">
+          <div class="card-title">Envoyer un message à l'école</div>
+          <div class="field"><label>Destinataire</label>
+            <select style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff">
+              <option>Administration</option><option>Professeur principal</option>
+            </select>
+          </div>
+          <div class="field"><label>Objet</label><input type="text" id="msg-objet" placeholder="Ex: Absence de mon enfant"/></div>
+          <div class="field"><label>Message</label><textarea id="msg-contenu" style="height:80px;resize:vertical" placeholder="Votre message..."></textarea></div>
+          <button class="btn btn-primary" onclick="alert('✅ Message envoyé à l\'école !')">Envoyer</button>
+        </div>
+      </div>
+
+      <!-- PRÉ-INSCRIPTION -->
+      <div class="page" id="page-preinscription">
+        <div class="card" style="max-width:520px">
+          <div class="card-title">Formulaire de pré-inscription</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="field"><label>Prénom *</label><input type="text" id="pi-prenom" placeholder="Mamadou"/></div>
+            <div class="field"><label>Nom *</label><input type="text" id="pi-nom" placeholder="Diallo"/></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="field"><label>Date de naissance</label><input type="date" id="pi-ddn"/></div>
+            <div class="field"><label>Sexe</label><select id="pi-sexe" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff"><option value="M">Masculin</option><option value="F">Féminin</option></select></div>
+          </div>
+          <div class="field"><label>Classe souhaitée</label>
+            <select id="pi-classe" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff">
+              <option>1ère année</option><option>2ème année</option><option>3ème année</option>
+              <option>4ème année</option><option>5ème année</option><option>6ème année</option>
+              <option>7ème année</option><option>8ème année</option><option>9ème année</option>
+              <option>10ème année</option><option>11ème année</option><option>12ème année</option>
+              <option>Terminale</option>
+            </select>
+          </div>
+          <div class="field"><label>Code de l'établissement *</label>
+            <input type="text" id="pi-code" placeholder="Ex: LD-2026-642" style="text-transform:uppercase"/>
+            <div style="font-size:11px;color:#aaa;margin-top:3px">Fourni par l'école</div>
+          </div>
+          <div class="field"><label>Votre téléphone (+224)</label><input type="tel" id="pi-tel" placeholder="620 000 000"/></div>
+          <div style="background:#f9f9f9;border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px;color:#888">
+            Votre email : <strong id="pi-email-display">—</strong> (email de connexion)
+          </div>
+          <button class="btn btn-primary" style="width:100%" onclick="soumettrePreinscription()">Soumettre la demande</button>
+        </div>
+      </div>
+
+      <!-- SIGNALEMENT ANONYME -->
+      <div class="page" id="page-signalement">
+        <div class="signal-form">
+          <div style="font-size:14px;font-weight:600;color:#791F1F;margin-bottom:8px">🚨 Signalement anonyme — Harcèlement</div>
+          <div style="font-size:12px;color:#A32D2D;margin-bottom:14px">Ce signalement est <strong>strictement confidentiel</strong>. Seul le super administrateur de la plateforme peut le voir. Votre identité ne sera jamais révélée.</div>
+          <div class="field"><label style="color:#791F1F">Description de la situation *</label>
+            <textarea id="sig-contenu" style="width:100%;padding:9px 12px;border:1px solid #F09595;border-radius:8px;font-size:13px;height:120px;resize:vertical;font-family:inherit" placeholder="Décrivez la situation de harcèlement..."></textarea>
+          </div>
+          <button class="btn" style="background:#E24B4A;color:#fff;border-color:#E24B4A;width:100%" onclick="envoyerSignalement()">Envoyer le signalement anonyme</button>
+        </div>
+        <div style="background:#EAF3DE;border-radius:10px;padding:14px;font-size:12px;color:#3B6D11">
+          <strong>✅ Votre protection :</strong> Ce signalement est chiffré et ne contient aucune information permettant de vous identifier. Il sera traité dans les 48h.
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://rcojerlzguwqpclyudjo.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjb2plcmx6Z3V3cXBjbHl1ZGpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NTg1MzIsImV4cCI6MjA5MTAzNDUzMn0.4R_NOrYLdhkVMKw87Z33FLS9LoAUAgVj_Uk_RBCf8tg';
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentUser = null;
+let ecoleId = null;
+let mesEnfants = [];
+
+(async () => {
+  const demo = JSON.parse(localStorage.getItem('edu_user') || '{}');
+  if (demo.role === 'parent') {
+    currentUser = { ...demo, demo: true };
+    const { data: ecoles } = await db.from('ecoles').select('*').limit(1);
+    if (ecoles?.length) { ecoleId = ecoles[0].id; document.getElementById('school-name').textContent = ecoles[0].nom; }
+  } else {
+    try {
+      const { data: { session } } = await db.auth.getSession();
+      if (!session) { window.location.href = 'index.html'; return; }
+      const { data: u } = await db.from('utilisateurs').select('*, ecoles(*)').eq('id', session.user.id).maybeSingle();
+      if (!u || u.role !== 'parent') { window.location.href = 'index.html'; return; }
+      currentUser = u; ecoleId = u.ecole_id;
+      document.getElementById('school-name').textContent = u.ecoles?.nom || '';
+    } catch(e) { window.location.href = 'index.html'; return; }
+  }
+  const nom = currentUser.nom || 'Parent';
+  const prenom = currentUser.prenom || '';
+  document.getElementById('user-name').textContent = `${prenom} ${nom}`.trim();
+  document.getElementById('user-initials').textContent = `${prenom[0]||''}${nom[0]||''}`.toUpperCase();
+  document.getElementById('page-sub').textContent = `Bienvenue, ${prenom || nom}`;
+  const piEmail = document.getElementById('pi-email-display');
+  if (piEmail) piEmail.textContent = currentUser.email || '—';
+  await chargerDashboard();
+})();
+
+const pageMeta = {
+  dashboard:     ['Accueil', 'Tableau de bord famille'],
+  enfants:       ['Mes enfants', 'Profils suivis'],
+  notes:         ['Notes & moyennes', 'Résultats scolaires'],
+  absences:      ['Absences', 'Suivi des présences'],
+  bulletins:     ['Bulletins', 'Documents scolaires'],
+  annonces:      ['Annonces école', 'Informations importantes'],
+  messagerie:    ['Messagerie', 'Contacter l\'école'],
+  preinscription:['Pré-inscription', 'Inscrire un enfant'],
+  signalement:   ['Signalement anonyme', 'Harcèlement — strictement confidentiel'],
+};
+
+function showPage(id, navEl) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  if (navEl) navEl.classList.add('active');
+  const m = pageMeta[id] || [id, ''];
+  document.getElementById('page-title').textContent = m[0];
+  document.getElementById('page-sub').textContent = m[1];
+  if (id === 'enfants') chargerEnfants();
+  if (id === 'notes') chargerNotes();
+  if (id === 'absences') chargerAbsences();
+  if (id === 'bulletins') chargerBulletins();
+  if (id === 'annonces') chargerAnnonces();
+}
+
+async function chargerDashboard() {
+  try {
+    if (ecoleId) {
+      const { data: enf } = await db.from('parents_eleves').select('*, eleves(id,nom,prenom,classes(nom))').eq('parent_id', currentUser?.id || '00000000-0000-0000-0000-000000000000');
+      mesEnfants = (enf||[]).map(e => e.eleves).filter(Boolean);
+      document.getElementById('d-enfants').textContent = mesEnfants.length;
+
+      // Absences non justifiées
+      const absPromises = mesEnfants.map(e => db.from('absences').select('id',{count:'exact'}).eq('eleve_id',e.id).eq('justifiee',false));
+      const absResults = await Promise.all(absPromises);
+      const totalAbs = absResults.reduce((s,r) => s+(r.count||0), 0);
+      document.getElementById('d-absences').textContent = totalAbs;
+
+      // Annonces
+      const { count: nbAnn } = await db.from('annonces').select('id',{count:'exact'}).eq('ecole_id', ecoleId);
+      document.getElementById('d-annonces').textContent = nbAnn || 0;
+
+      // Cartes enfants
+      document.getElementById('enfants-cards').innerHTML = mesEnfants.length === 0
+        ? ''
+        : mesEnfants.map(e => `
+          <div class="enfant-card">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700">${(e.prenom?.[0]||'')+(e.nom?.[0]||'')}</div>
+              <div>
+                <div style="font-size:16px;font-weight:600">${e.prenom} ${e.nom}</div>
+                <div style="font-size:12px;opacity:0.8">${e.classes?.nom||'Classe non définie'}</div>
+              </div>
+            </div>
+          </div>`).join('');
+
+      // Annonces dashboard
+      const { data: anns } = await db.from('annonces').select('*').eq('ecole_id', ecoleId).order('created_at',{ascending:false}).limit(3);
+      document.getElementById('annonces-dash').innerHTML = (anns||[]).length === 0
+        ? '<div class="empty">Aucune annonce.</div>'
+        : (anns||[]).map(a => `
+          <div style="padding:10px 0;border-bottom:1px solid #f5f5f0">
+            <div style="font-size:13px;font-weight:500">${a.titre}</div>
+            <div style="font-size:11px;color:#aaa;margin-top:2px">${new Date(a.created_at).toLocaleDateString('fr-FR')}</div>
+          </div>`).join('');
+    } else {
+      document.getElementById('d-enfants').textContent = '0';
+      document.getElementById('d-absences').textContent = '0';
+      document.getElementById('d-annonces').textContent = '0';
+      document.getElementById('annonces-dash').innerHTML = '<div class="empty"><div class="empty-icon">🏫</div>Connectez-vous avec un vrai compte pour voir les données.</div>';
+    }
+
+    document.getElementById('load-dash').style.display = 'none';
+    document.getElementById('cont-dash').style.display = 'block';
+  } catch(e) {
+    document.getElementById('load-dash').innerHTML = `<div style="color:#A32D2D;text-align:center;padding:20px">Erreur : ${e.message}</div>`;
+  }
+}
+
+async function chargerEnfants() {
+  document.getElementById('load-enfants').style.display = 'block';
+  document.getElementById('cont-enfants').innerHTML = '';
+  if (mesEnfants.length === 0) {
+    document.getElementById('load-enfants').innerHTML = '<div class="empty"><div class="empty-icon">👧</div>Aucun enfant rattaché à votre compte.</div>';
+    return;
+  }
+  document.getElementById('load-enfants').style.display = 'none';
+  document.getElementById('cont-enfants').innerHTML = mesEnfants.map(e => `
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px">
+        <div style="width:56px;height:56px;border-radius:50%;background:#E1F5EE;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#085041">${(e.prenom?.[0]||'')+(e.nom?.[0]||'')}</div>
+        <div>
+          <div style="font-size:16px;font-weight:600">${e.prenom} ${e.nom}</div>
+          <div style="font-size:13px;color:#888">${e.classes?.nom||'—'}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-sm" onclick="showPage('notes',null)">📊 Notes</button>
+        <button class="btn-sm" onclick="showPage('absences',null)">📌 Absences</button>
+        <button class="btn-sm" onclick="showPage('bulletins',null)">📄 Bulletin</button>
+      </div>
+    </div>`).join('');
+}
+
+async function chargerNotes() {
+  document.getElementById('load-notes').style.display = 'block';
+  document.getElementById('cont-notes').innerHTML = '';
+  if (!ecoleId || mesEnfants.length === 0) {
+    document.getElementById('load-notes').innerHTML = '<div class="empty"><div class="empty-icon">📊</div>Aucune donnée disponible en mode démo.<br>Connectez-vous avec un vrai compte parent.</div>';
+    return;
+  }
+  for (const enfant of mesEnfants) {
+    const { data: notes } = await db.from('notes').select('*, matieres(nom,coefficient)').eq('eleve_id', enfant.id).order('created_at',{ascending:false});
+    const moy = (notes||[]).length ? ((notes||[]).reduce((s,n)=>s+Number(n.valeur),0)/(notes||[]).length).toFixed(1) : '—';
+    document.getElementById('cont-notes').innerHTML += `
+      <div class="card">
+        <div class="card-title">${enfant.prenom} ${enfant.nom} — Moyenne : <span style="color:${moy>=10?'#3B6D11':'#A32D2D'}">${moy}/20</span></div>
+        <table>
+          <thead><tr><th>Matière</th><th>Note</th><th>Coef.</th><th>Appréciation</th></tr></thead>
+          <tbody>
+            ${(notes||[]).length === 0 ? '<tr><td colspan="4" style="text-align:center;color:#aaa;padding:16px">Aucune note pour l\'instant</td></tr>' :
+            (notes||[]).map(n => `<tr>
+              <td style="font-weight:500">${n.matieres?.nom||'—'}</td>
+              <td class="${Number(n.valeur)>=14?'note-high':Number(n.valeur)>=10?'note-mid':'note-low'}">${n.valeur}/20</td>
+              <td style="color:#888">${n.matieres?.coefficient||1}</td>
+              <td style="font-size:12px;color:#888">${n.appreciation||'—'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  }
+  document.getElementById('load-notes').style.display = 'none';
+}
+
+async function chargerAbsences() {
+  document.getElementById('load-absences').style.display = 'block';
+  document.getElementById('cont-absences').style.display = 'none';
+  if (!ecoleId || mesEnfants.length === 0) {
+    document.getElementById('load-absences').innerHTML = '<div class="empty"><div class="empty-icon">📌</div>Aucune donnée en mode démo.</div>';
+    return;
+  }
+  const absences = [];
+  for (const enfant of mesEnfants) {
+    const { data } = await db.from('absences').select('*').eq('eleve_id', enfant.id).order('date_absence',{ascending:false});
+    (data||[]).forEach(a => absences.push({ ...a, enfant }));
+  }
+  document.getElementById('load-absences').style.display = 'none';
+  document.getElementById('cont-absences').style.display = 'block';
+  document.getElementById('tbody-absences').innerHTML = absences.length === 0
+    ? '<tr><td colspan="4" style="text-align:center;color:#aaa;padding:20px">✅ Aucune absence enregistrée</td></tr>'
+    : absences.map(a => `<tr>
+        <td style="font-weight:500">${a.enfant.prenom} ${a.enfant.nom}</td>
+        <td style="color:#888;font-size:12px">${new Date(a.date_absence).toLocaleDateString('fr-FR')}</td>
+        <td>${a.periode}</td>
+        <td><span class="badge ${a.justifiee?'badge-ok':'badge-warn'}">${a.justifiee?'Justifiée':'Non justifiée'}</span></td>
+      </tr>`).join('');
+}
+
+async function chargerBulletins() {
+  document.getElementById('load-bulletins').style.display = 'none';
+  document.getElementById('cont-bulletins').innerHTML = mesEnfants.length === 0
+    ? '<div class="empty"><div class="empty-icon">📄</div>Connectez-vous avec un vrai compte pour accéder aux bulletins.</div>'
+    : mesEnfants.map(e => `
+      <div class="card">
+        <div class="card-title">${e.prenom} ${e.nom}</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:#f9f9f9;border-radius:8px">
+            <div><div style="font-size:13px;font-weight:500">Bulletin — Trimestre 2 · 2025-2026</div><div style="font-size:11px;color:#aaa;margin-top:2px">Disponible</div></div>
+            <button class="btn btn-primary" style="font-size:12px;padding:6px 12px" onclick="alert('📄 Bulletin PDF — Disponible après génération par l\\'école')">Télécharger</button>
+          </div>
+        </div>
+      </div>`).join('');
+}
+
+async function chargerAnnonces() {
+  document.getElementById('load-annonces').style.display = 'block';
+  document.getElementById('cont-annonces').innerHTML = '';
+  if (!ecoleId) { document.getElementById('load-annonces').innerHTML = '<div class="empty">Aucune annonce.</div>'; return; }
+  const { data } = await db.from('annonces').select('*').eq('ecole_id', ecoleId).order('created_at',{ascending:false});
+  document.getElementById('load-annonces').style.display = 'none';
+  document.getElementById('cont-annonces').innerHTML = (data||[]).length === 0
+    ? '<div class="empty"><div class="empty-icon">📢</div>Aucune annonce publiée.</div>'
+    : (data||[]).map(a => `
+      <div class="card" style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <div style="font-size:14px;font-weight:600">${a.titre}</div>
+          <span class="badge badge-info">${a.destinataires}</span>
+        </div>
+        <div style="font-size:13px;color:#555">${a.contenu}</div>
+        <div style="font-size:11px;color:#aaa;margin-top:6px">${new Date(a.created_at).toLocaleDateString('fr-FR')}</div>
+      </div>`).join('');
+}
+
+async function soumettrePreinscription() {
+  const prenom = document.getElementById('pi-prenom').value.trim();
+  const nom = document.getElementById('pi-nom').value.trim();
+  const code = document.getElementById('pi-code').value.trim().toUpperCase();
+  const tel = document.getElementById('pi-tel').value.trim();
+  const classe = document.getElementById('pi-classe').value;
+  const ddn = document.getElementById('pi-ddn').value;
+  const sexe = document.getElementById('pi-sexe').value;
+  if (!prenom || !nom || !code) return alert('Remplissez les champs obligatoires.');
+  const { data: ecole } = await db.from('ecoles').select('id,nom').eq('code_acces', code).maybeSingle();
+  if (!ecole) return alert('Code établissement invalide. Vérifiez avec l\'école.');
+  await db.from('preinscriptions').insert([{
+    ecole_id: ecole.id, prenom, nom, date_naissance: ddn||null, sexe,
+    classe_souhaitee: classe, email_parent: currentUser?.email||'demo@demo.com',
+    telephone_parent: tel ? '+224'+tel : null, statut: 'en_attente'
+  }]);
+  alert(`✅ Demande envoyée pour ${prenom} ${nom} à ${ecole.nom} !\nL'école vous contactera sous 48h.`);
+  document.getElementById('pi-prenom').value = '';
+  document.getElementById('pi-nom').value = '';
+  document.getElementById('pi-code').value = '';
+}
+
+async function envoyerSignalement() {
+  const contenu = document.getElementById('sig-contenu').value.trim();
+  if (!contenu) return alert('Décrivez la situation.');
+  if (!ecoleId) return alert('École non trouvée.');
+  await db.from('signalements').insert([{ ecole_id: ecoleId, contenu, statut: 'nouveau' }]);
+  alert('✅ Signalement envoyé de manière anonyme. Il sera traité dans les 48h.');
+  document.getElementById('sig-contenu').value = '';
+}
+
+async function logout() {
+  localStorage.removeItem('edu_user');
+  await db.auth.signOut();
+  window.location.href = 'index.html';
+}
+</script>
+</body>
+</html>

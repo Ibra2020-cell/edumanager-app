@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <title>EduManager — Accès démo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f0eb; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
+    h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+    p { font-size: 13px; color: #888; margin-bottom: 32px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; width: 100%; max-width: 700px; }
+    .card { background: #fff; border: 1px solid #e8e8e8; border-radius: 16px; padding: 24px; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; text-align: center; text-decoration: none; }
+    .card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
+    .card-icon { font-size: 36px; margin-bottom: 12px; }
+    .card-title { font-size: 15px; font-weight: 600; color: #1a1a1a; margin-bottom: 4px; }
+    .card-sub { font-size: 12px; color: #888; margin-bottom: 14px; }
+    .card-badge { display: inline-block; font-size: 11px; padding: 4px 12px; border-radius: 20px; font-weight: 600; }
+    .sa { border-top: 4px solid #7F77DD; }
+    .sa .card-badge { background: #EEEDFE; color: #3C3489; }
+    .ae { border-top: 4px solid #185FA5; }
+    .ae .card-badge { background: #E6F1FB; color: #0C447C; }
+    .pr { border-top: 4px solid #1D9E75; }
+    .pr .card-badge { background: #E1F5EE; color: #085041; }
+    .el { border-top: 4px solid #EF9F27; }
+    .el .card-badge { background: #FAEEDA; color: #633806; }
+    .pf { border-top: 4px solid #534AB7; }
+    .pf .card-badge { background: #EEEDFE; color: #26215C; }
+  </style>
+</head>
+<body>
+  <h1>EduManager — Démo</h1>
+  <p>Cliquez sur un rôle pour accéder directement à son espace</p>
+  <div class="grid">
+    <div class="card sa" onclick="go('super_admin','Alain Dupont','super-admin.html')">
+      <div class="card-icon">👑</div>
+      <div class="card-title">Super Admin</div>
+      <div class="card-sub">Propriétaire de la plateforme</div>
+      <span class="card-badge">Alain Dupont</span>
+    </div>
+    <div class="card ae" onclick="go('admin_ecole','Fatima Benali','admin-ecole.html')">
+      <div class="card-icon">🏫</div>
+      <div class="card-title">Admin École</div>
+      <div class="card-sub">Directrice — Lycée Victor Hugo</div>
+      <span class="card-badge">Fatima Benali</span>
+    </div>
+    <div class="card pf" onclick="go('professeur','Marc Leclerc','professeur.html')">
+      <div class="card-icon">👩‍🏫</div>
+      <div class="card-title">Professeur</div>
+      <div class="card-sub">Histoire-Géo — Collège Pasteur</div>
+      <span class="card-badge">Marc Leclerc</span>
+    </div>
+    <div class="card pr" onclick="go('parent','Sophie Roux','parent.html')">
+      <div class="card-icon">👨‍👩‍👧</div>
+      <div class="card-title">Parent</div>
+      <div class="card-sub">Parent de Lucas Roux</div>
+      <span class="card-badge">Sophie Roux</span>
+    </div>
+    <div class="card el" onclick="go('eleve','Lucas Roux','eleve.html')">
+      <div class="card-icon">🎒</div>
+      <div class="card-title">Élève</div>
+      <div class="card-sub">3ème B — Lycée Victor Hugo</div>
+      <span class="card-badge">Lucas Roux</span>
+    </div>
+  </div>
+
+  <script>
+    function go(role, nom, page) {
+      localStorage.setItem('edu_user', JSON.stringify({ role, nom }));
+      window.location.href = page;
+    }
+  </script>
+</body>
+</html>

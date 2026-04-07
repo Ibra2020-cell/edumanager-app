@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EduManager — Connexion</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f0eb; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
+    .logo { text-align: center; margin-bottom: 32px; }
+    .logo-title { font-size: 28px; font-weight: 800; color: #1a1a1a; }
+    .logo-sub { font-size: 13px; color: #888; margin-top: 4px; }
+    .card { background: #fff; border-radius: 16px; border: 1px solid #e8e8e8; padding: 32px; width: 100%; max-width: 420px; }
+    .tabs { display: flex; margin-bottom: 24px; border: 1px solid #e8e8e8; border-radius: 10px; overflow: hidden; }
+    .tab { flex: 1; padding: 10px; text-align: center; font-size: 13px; font-weight: 500; cursor: pointer; color: #888; background: #f9f9f9; border: none; font-family: inherit; }
+    .tab.active { background: #fff; color: #1a1a1a; }
+    .field { margin-bottom: 16px; }
+    label { font-size: 12px; color: #888; display: block; margin-bottom: 6px; }
+    input, select { width: 100%; padding: 11px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; color: #1a1a1a; background: #fff; outline: none; font-family: inherit; }
+    input:focus { border-color: #185FA5; box-shadow: 0 0 0 3px #185FA520; }
+    .btn-main { width: 100%; padding: 13px; background: #185FA5; color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 4px; font-family: inherit; }
+    .btn-main:hover { background: #1252a0; }
+    .btn-main:disabled { opacity: 0.6; cursor: not-allowed; }
+    .error { background: #FCEBEB; color: #791F1F; border-radius: 8px; padding: 10px 12px; font-size: 12px; margin-bottom: 16px; display: none; border-left: 3px solid #E24B4A; }
+    .success { background: #EAF3DE; color: #27500A; border-radius: 8px; padding: 10px 12px; font-size: 12px; margin-bottom: 16px; display: none; border-left: 3px solid #1D9E75; }
+    .divider { text-align: center; font-size: 12px; color: #bbb; margin: 20px 0; position: relative; }
+    .divider::before, .divider::after { content:''; position:absolute; top:50%; width:42%; height:1px; background:#e8e8e8; }
+    .divider::before { left:0; } .divider::after { right:0; }
+    .demo-box { background: #f9f9f9; border-radius: 10px; padding: 14px; }
+    .demo-title { font-size: 11px; color: #aaa; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+    .demo-btn { display: block; width: 100%; padding: 9px 12px; background: #fff; border: 1px solid #e8e8e8; border-radius: 8px; font-size: 13px; color: #555; cursor: pointer; margin-bottom: 6px; text-align: left; font-family: inherit; }
+    .demo-btn:hover { background: #f0f0eb; }
+    .demo-btn:last-child { margin-bottom: 0; }
+    .demo-badge { float: right; font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 600; margin-top: 2px; }
+    .mdp-wrap { position: relative; }
+    .mdp-wrap input { padding-right: 40px; }
+    .eye { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 16px; color: #aaa; background: none; border: none; }
+    .force { height: 4px; border-radius: 4px; background: #f0f0f0; margin-top: 6px; overflow: hidden; }
+    .force-fill { height: 100%; border-radius: 4px; transition: all 0.3s; width: 0; }
+    .force-txt { font-size: 10px; color: #888; margin-top: 3px; }
+    .regle { font-size: 11px; padding: 2px 0; display: flex; align-items: center; gap: 6px; color: #aaa; }
+    .regle.ok { color: #3B6D11; }
+    .regle-dot { width: 6px; height: 6px; border-radius: 50%; background: #ddd; flex-shrink: 0; }
+    .regle.ok .regle-dot { background: #1D9E75; }
+  </style>
+</head>
+<body>
+
+<div class="logo">
+  <div class="logo-title">EduManager 🇬🇳</div>
+  <div class="logo-sub">Plateforme scolaire multi-établissements — Guinée</div>
+</div>
+
+<div class="card">
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('login')">Connexion</button>
+    <button class="tab" onclick="switchTab('register')">Créer un compte</button>
+  </div>
+
+  <!-- CONNEXION -->
+  <div id="form-login">
+    <div id="err-login" class="error"></div>
+    <div id="ok-login" class="success"></div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="l-email" placeholder="votre@email.com"/>
+    </div>
+    <div class="field">
+      <label>Mot de passe</label>
+      <div class="mdp-wrap">
+        <input type="password" id="l-mdp" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/>
+        <button class="eye" onclick="toggle('l-mdp')">👁</button>
+      </div>
+    </div>
+    <button class="btn-main" id="btn-login" onclick="doLogin()">Se connecter</button>
+
+    <div class="divider">accès démo rapide</div>
+    <div class="demo-box">
+      <div class="demo-title">Tester sans compte</div>
+      <button class="demo-btn" onclick="demo('super_admin','Ibrahima Cissé')">
+        Super Admin <span class="demo-badge" style="background:#EEEDFE;color:#3C3489">Propriétaire</span>
+      </button>
+      <button class="demo-btn" onclick="demo('admin_ecole','Fatima Bangoura')">
+        Admin École <span class="demo-badge" style="background:#E6F1FB;color:#0C447C">Directeur</span>
+      </button>
+      <button class="demo-btn" onclick="demo('professeur','Mamadou Diallo')">
+        Professeur <span class="demo-badge" style="background:#E1F5EE;color:#085041">Enseignant</span>
+      </button>
+      <button class="demo-btn" onclick="demo('parent','Aissatou Bah')">
+        Parent <span class="demo-badge" style="background:#EAF3DE;color:#27500A">Famille</span>
+      </button>
+      <button class="demo-btn" onclick="demo('eleve','Oumar Sow')">
+        Élève <span class="demo-badge" style="background:#FAEEDA;color:#633806">Étudiant</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- INSCRIPTION -->
+  <div id="form-register" style="display:none">
+    <div id="err-reg" class="error"></div>
+    <div id="ok-reg" class="success"></div>
+    <div class="field">
+      <label>Je suis un...</label>
+      <select id="r-role">
+        <option value="parent">Parent</option>
+        <option value="eleve">Élève</option>
+        <option value="professeur">Professeur</option>
+      </select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="field"><label>Prénom</label><input type="text" id="r-prenom" placeholder="Mamadou"/></div>
+      <div class="field"><label>Nom</label><input type="text" id="r-nom" placeholder="Diallo"/></div>
+    </div>
+    <div class="field">
+      <label>Téléphone (+224)</label>
+      <input type="tel" id="r-tel" placeholder="620 000 000"/>
+    </div>
+    <div class="field"><label>Email</label><input type="email" id="r-email" placeholder="votre@email.com"/></div>
+    <div class="field">
+      <label>Mot de passe</label>
+      <div class="mdp-wrap">
+        <input type="password" id="r-mdp" placeholder="Min. 8 car." oninput="checkForce(this.value)"/>
+        <button class="eye" onclick="toggle('r-mdp')">👁</button>
+      </div>
+      <div class="force"><div class="force-fill" id="force-fill"></div></div>
+      <div class="force-txt" id="force-txt">Entrez un mot de passe</div>
+      <div id="regles" style="margin-top:6px;display:none">
+        <div class="regle" id="r1"><div class="regle-dot"></div>Au moins 8 caractères</div>
+        <div class="regle" id="r2"><div class="regle-dot"></div>Au moins une majuscule</div>
+        <div class="regle" id="r3"><div class="regle-dot"></div>Au moins un chiffre</div>
+        <div class="regle" id="r4"><div class="regle-dot"></div>Au moins un symbole (!@#...)</div>
+      </div>
+    </div>
+    <div class="field">
+      <label>Code de l'établissement</label>
+      <input type="text" id="r-code" placeholder="Ex: LYC-2024-001" style="text-transform:uppercase"/>
+      <div style="font-size:11px;color:#aaa;margin-top:4px">Fourni par votre école</div>
+    </div>
+    <button class="btn-main" id="btn-reg" onclick="doRegister()">Créer mon compte</button>
+  </div>
+</div>
+
+<script>
+// ============ SUPABASE INIT ============
+const SUPABASE_URL = 'https://rcojerlzguwqpclyudjo.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjb2plcmx6Z3V3cXBjbHl1ZGpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NTg1MzIsImV4cCI6MjA5MTAzNDUzMn0.4R_NOrYLdhkVMKw87Z33FLS9LoAUAgVj_Uk_RBCf8tg';
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const ROLES = {
+  super_admin: 'super-admin.html',
+  admin_ecole: 'admin-ecole.html',
+  professeur:  'professeur.html',
+  parent:      'parent.html',
+  eleve:       'eleve.html'
+};
+
+// Vérifier si déjà connecté
+(async () => {
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    if (session) {
+      const { data: u } = await db.from('utilisateurs').select('role').eq('id', session.user.id).single();
+      if (u?.role) {
+        localStorage.setItem('edu_user', JSON.stringify({ role: u.role, email: session.user.email }));
+        window.location.href = ROLES[u.role] || 'index.html';
+      }
+    }
+  } catch(e) { console.log('Pas de session active'); }
+})();
+
+// ============ UI ============
+function switchTab(t) {
+  document.querySelectorAll('.tab').forEach((el,i) => el.classList.toggle('active', (t==='login'&&i===0)||(t==='register'&&i===1)));
+  document.getElementById('form-login').style.display = t==='login' ? 'block' : 'none';
+  document.getElementById('form-register').style.display = t==='register' ? 'block' : 'none';
+}
+
+function showErr(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = msg; el.style.display = 'block';
+  setTimeout(() => el.style.display='none', 6000);
+}
+function showOk(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = msg; el.style.display = 'block';
+}
+function toggle(id) {
+  const el = document.getElementById(id);
+  el.type = el.type==='password' ? 'text' : 'password';
+}
+
+function checkForce(mdp) {
+  document.getElementById('regles').style.display = mdp ? 'block' : 'none';
+  const checks = [
+    { id:'r1', ok: mdp.length >= 8 },
+    { id:'r2', ok: /[A-Z]/.test(mdp) },
+    { id:'r3', ok: /[0-9]/.test(mdp) },
+    { id:'r4', ok: /[^A-Za-z0-9]/.test(mdp) }
+  ];
+  let score = 0;
+  checks.forEach(c => {
+    const el = document.getElementById(c.id);
+    el.classList.toggle('ok', c.ok);
+    el.querySelector('.regle-dot').style.background = c.ok ? '#1D9E75' : '#ddd';
+    if (c.ok) score++;
+  });
+  const cfg = [
+    null,
+    { w:'25%', c:'#E24B4A', t:'Très faible' },
+    { w:'50%', c:'#EF9F27', t:'Faible' },
+    { w:'75%', c:'#185FA5', t:'Correct' },
+    { w:'100%', c:'#1D9E75', t:'Fort ✓' }
+  ][score] || { w:'0%', c:'#E24B4A', t:'Entrez un mot de passe' };
+  const f = document.getElementById('force-fill');
+  f.style.width = cfg.w; f.style.background = cfg.c;
+  const ft = document.getElementById('force-txt');
+  ft.textContent = cfg.t; ft.style.color = cfg.c;
+}
+
+// ============ CONNEXION ============
+async function doLogin() {
+  const email = document.getElementById('l-email').value.trim();
+  const mdp   = document.getElementById('l-mdp').value;
+  if (!email || !mdp) return showErr('err-login','Remplissez tous les champs.');
+
+  const btn = document.getElementById('btn-login');
+  btn.disabled = true; btn.textContent = 'Connexion...';
+
+  try {
+    const { data, error } = await db.auth.signInWithPassword({ email, password: mdp });
+    if (error) throw error;
+
+    // Récupérer le profil
+    const { data: u, error: e2 } = await db
+      .from('utilisateurs')
+      .select('role, nom, prenom, ecole_id')
+      .eq('id', data.user.id)
+      .single();
+
+    if (e2 || !u) {
+      // Profil manquant — créer automatiquement si c'est le super admin
+      if (email === 'ibra-cisse@outlook.fr') {
+        await db.from('utilisateurs').upsert({
+          id: data.user.id,
+          nom: 'Cissé', prenom: 'Ibrahima',
+          email: email, role: 'super_admin', actif: true
+        });
+        localStorage.setItem('edu_user', JSON.stringify({ role:'super_admin', nom:'Cissé', prenom:'Ibrahima', email }));
+        window.location.href = 'super-admin.html';
+        return;
+      }
+      throw new Error('Profil introuvable. Contactez votre administrateur.');
+    }
+
+    // Mettre à jour dernière connexion
+    await db.from('utilisateurs').update({ derniere_connexion: new Date().toISOString() }).eq('id', data.user.id);
+
+    // Sauvegarder localement
+    localStorage.setItem('edu_user', JSON.stringify({
+      role: u.role, nom: u.nom, prenom: u.prenom,
+      ecole_id: u.ecole_id, email, demo: false
+    }));
+
+    window.location.href = ROLES[u.role] || 'index.html';
+
+  } catch(e) {
+    showErr('err-login', e.message === 'Invalid login credentials'
+      ? 'Email ou mot de passe incorrect.' : e.message);
+  }
+
+  btn.disabled = false; btn.textContent = 'Se connecter';
+}
+
+// ============ INSCRIPTION ============
+async function doRegister() {
+  const role   = document.getElementById('r-role').value;
+  const prenom = document.getElementById('r-prenom').value.trim();
+  const nom    = document.getElementById('r-nom').value.trim();
+  const tel    = document.getElementById('r-tel').value.trim();
+  const email  = document.getElementById('r-email').value.trim();
+  const mdp    = document.getElementById('r-mdp').value;
+  const code   = document.getElementById('r-code').value.trim().toUpperCase();
+
+  if (!prenom||!nom||!email||!mdp||!code) return showErr('err-reg','Remplissez tous les champs.');
+
+  // Valider mot de passe
+  if (mdp.length < 8)           return showErr('err-reg','Mot de passe trop court (min. 8 caractères).');
+  if (!/[A-Z]/.test(mdp))       return showErr('err-reg','Ajoutez au moins une majuscule.');
+  if (!/[0-9]/.test(mdp))       return showErr('err-reg','Ajoutez au moins un chiffre.');
+  if (!/[^A-Za-z0-9]/.test(mdp)) return showErr('err-reg','Ajoutez au moins un symbole (!@#...).');
+
+  const btn = document.getElementById('btn-reg');
+  btn.disabled = true; btn.textContent = 'Création...';
+
+  try {
+    // Vérifier le code école
+    const { data: ecole, error: eErr } = await db
+      .from('ecoles').select('id,nom,abonnement_actif').eq('code_acces', code).single();
+
+    if (eErr || !ecole) return showErr('err-reg','Code établissement invalide. Vérifiez avec votre école.');
+    if (!ecole.abonnement_actif) return showErr('err-reg','Cet établissement n\'a pas d\'abonnement actif.');
+
+    // Créer le compte
+    const { data: auth, error: aErr } = await db.auth.signUp({ email, password: mdp });
+    if (aErr) throw aErr;
+
+    // Créer le profil
+    if (auth.user) {
+      await db.from('utilisateurs').insert([{
+        id: auth.user.id,
+        nom, prenom, email, role,
+        telephone: '+224' + tel,
+        ecole_id: ecole.id,
+        actif: true
+      }]);
+    }
+
+    showOk('ok-reg', `✅ Compte créé pour ${ecole.nom} ! Vérifiez votre email puis connectez-vous.`);
+
+  } catch(e) {
+    showErr('err-reg', e.message || 'Erreur lors de la création.');
+  }
+
+  btn.disabled = false; btn.textContent = 'Créer mon compte';
+}
+
+// ============ DÉMO ============
+function demo(role, nom) {
+  localStorage.setItem('edu_user', JSON.stringify({ role, nom, demo: true }));
+  window.location.href = ROLES[role];
+}
+</script>
+</body>
+</html>

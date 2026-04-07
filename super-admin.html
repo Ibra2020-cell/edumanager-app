@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EduManager — Super Admin</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f0eb; color: #1a1a1a; }
+    .app { display: flex; height: 100vh; }
+    .sidebar { width: 230px; background: #1a1a2e; display: flex; flex-direction: column; flex-shrink: 0; }
+    .sidebar-logo { padding: 24px 20px 20px; border-bottom: 1px solid #ffffff15; }
+    .logo-title { font-size: 16px; font-weight: 700; color: #fff; }
+    .logo-sub { font-size: 10px; color: #ffffff60; margin-top: 3px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .logo-badge { display: inline-block; margin-top: 8px; font-size: 10px; padding: 3px 8px; border-radius: 20px; background: #7F77DD30; color: #AFA9EC; border: 1px solid #7F77DD50; font-weight: 600; }
+    .nav { flex: 1; padding: 12px 0; overflow-y: auto; }
+    .nav-section { padding: 10px 20px 4px; font-size: 9px; color: #ffffff35; text-transform: uppercase; letter-spacing: 0.08em; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 20px; cursor: pointer; font-size: 13px; color: #ffffff70; transition: all 0.15s; border-left: 2px solid transparent; }
+    .nav-item:hover { background: #ffffff08; color: #ffffffcc; }
+    .nav-item.active { background: #ffffff12; color: #fff; border-left-color: #7F77DD; font-weight: 500; }
+    .nav-icon { font-size: 15px; width: 20px; text-align: center; }
+    .nav-badge { margin-left: auto; font-size: 10px; padding: 2px 7px; border-radius: 20px; background: #E24B4A30; color: #F09595; }
+    .sidebar-user { padding: 16px 20px; border-top: 1px solid #ffffff15; display: flex; align-items: center; gap: 10px; }
+    .user-avatar { width: 34px; height: 34px; border-radius: 50%; background: #7F77DD40; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #AFA9EC; flex-shrink: 0; }
+    .user-name { font-size: 13px; font-weight: 500; color: #fff; }
+    .user-role { font-size: 10px; color: #AFA9EC; }
+    .logout-btn { margin-left: auto; font-size: 18px; cursor: pointer; opacity: 0.5; color: #fff; background: none; border: none; }
+    .logout-btn:hover { opacity: 1; }
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .topbar { background: #fff; border-bottom: 1px solid #e8e8e8; padding: 0 28px; height: 58px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .topbar-left { display: flex; flex-direction: column; }
+    .topbar-title { font-size: 15px; font-weight: 600; }
+    .topbar-sub { font-size: 11px; color: #aaa; margin-top: 1px; }
+    .topbar-actions { display: flex; align-items: center; gap: 10px; }
+    .btn { padding: 8px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; border: 1px solid #ddd; background: #fff; color: #1a1a1a; font-family: inherit; transition: background 0.15s; }
+    .btn:hover { background: #f5f5f0; }
+    .btn-primary { background: #185FA5; color: #fff; border-color: #185FA5; font-weight: 500; }
+    .btn-primary:hover { background: #1252a0; }
+    .btn-sm { padding: 5px 10px; font-size: 11px; border-radius: 8px; cursor: pointer; border: 1px solid #ddd; background: #fff; font-family: inherit; }
+    .btn-danger { background: #FCEBEB; color: #791F1F; border-color: #F09595; }
+    .content { flex: 1; overflow-y: auto; padding: 28px; }
+    .page { display: none; }
+    .page.active { display: block; }
+    .section-label { font-size: 12px; color: #999; margin-bottom: 18px; font-weight: 500; }
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 28px; }
+    .stat-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 14px; padding: 20px; position: relative; overflow: hidden; }
+    .stat-accent { position: absolute; top: 0; left: 0; right: 0; height: 3px; border-radius: 14px 14px 0 0; }
+    .stat-label { font-size: 12px; color: #999; margin-bottom: 8px; }
+    .stat-value { font-size: 28px; font-weight: 700; }
+    .stat-change { font-size: 11px; margin-top: 6px; color: #888; }
+    .grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; margin-bottom: 18px; }
+    .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 18px; }
+    .card { background: #fff; border: 1px solid #e8e8e8; border-radius: 14px; padding: 20px; margin-bottom: 18px; }
+    .card-title { font-size: 14px; font-weight: 600; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+    .card-link { font-size: 12px; color: #185FA5; cursor: pointer; font-weight: 400; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead tr { border-bottom: 1px solid #e8e8e8; }
+    th { padding: 8px 0; font-weight: 500; color: #999; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+    td { padding: 11px 0; border-bottom: 1px solid #f5f5f0; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    .badge { font-size: 10px; padding: 3px 9px; border-radius: 20px; font-weight: 500; white-space: nowrap; }
+    .badge-ok { background: #EAF3DE; color: #3B6D11; }
+    .badge-warn { background: #FAEEDA; color: #633806; }
+    .badge-err { background: #FCEBEB; color: #791F1F; }
+    .badge-info { background: #E6F1FB; color: #0C447C; }
+    .badge-purple { background: #EEEDFE; color: #3C3489; }
+    .loading { text-align: center; padding: 40px; color: #aaa; font-size: 13px; }
+    .spinner-big { width: 32px; height: 32px; border: 3px solid #e8e8e8; border-top-color: #185FA5; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .empty { text-align: center; padding: 40px; color: #aaa; }
+    .empty-icon { font-size: 40px; margin-bottom: 12px; }
+    .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; }
+    .modal-bg.open { display: flex; }
+    .modal { background: #fff; border-radius: 16px; padding: 28px; width: 500px; max-width: 95vw; max-height: 90vh; overflow-y: auto; }
+    .modal-title { font-size: 16px; font-weight: 600; margin-bottom: 20px; }
+    .field { margin-bottom: 14px; }
+    .field label { font-size: 12px; color: #888; display: block; margin-bottom: 5px; }
+    .field input, .field select, .field textarea { width: 100%; padding: 9px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; font-family: inherit; outline: none; }
+    .field input:focus, .field select:focus { border-color: #185FA5; }
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+    .alert { padding: 10px 14px; border-radius: 8px; font-size: 12px; margin-bottom: 16px; display: none; }
+    .alert-err { background: #FCEBEB; color: #791F1F; border-left: 3px solid #E24B4A; }
+    .alert-ok { background: #EAF3DE; color: #27500A; border-left: 3px solid #1D9E75; }
+    .plan-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+    .plan-gratuit { background: #f0f0f0; color: #888; }
+    .plan-standard { background: #E6F1FB; color: #0C447C; }
+    .plan-premium { background: #EEEDFE; color: #3C3489; }
+    .progress-bar { height: 5px; border-radius: 4px; background: #f0f0f0; overflow: hidden; margin-top: 6px; }
+    .progress-fill { height: 100%; border-radius: 4px; }
+    .signal-card { background: #FCEBEB; border: 1px solid #F09595; border-radius: 12px; padding: 16px; margin-bottom: 10px; }
+    .signal-card.resolu { background: #f9f9f9; border-color: #e8e8e8; opacity: 0.6; }
+    .paiement-row { display: flex; align-items: center; gap: 12px; padding: 14px; background: #f9f9f9; border-radius: 10px; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <div class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-title">EduManager 🇬🇳</div>
+      <div class="logo-sub">Panneau de contrôle</div>
+      <div class="logo-badge">Super Admin</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-section">Vue globale</div>
+      <div class="nav-item active" onclick="showPage('dashboard',this)"><span class="nav-icon">🏠</span> Tableau de bord</div>
+      <div class="nav-item" onclick="showPage('ecoles',this)"><span class="nav-icon">🏫</span> Écoles</div>
+      <div class="nav-item" onclick="showPage('abonnements',this)"><span class="nav-icon">💳</span> Abonnements</div>
+      <div class="nav-item" onclick="showPage('paiements',this)"><span class="nav-icon">💰</span> Paiements <span class="nav-badge" id="badge-paiements">0</span></div>
+      <div class="nav-section">Statistiques</div>
+      <div class="nav-item" onclick="showPage('stats',this)"><span class="nav-icon">📈</span> Statistiques</div>
+      <div class="nav-item" onclick="showPage('top100',this)"><span class="nav-icon">🏆</span> Top 100 élèves</div>
+      <div class="nav-section">Sécurité</div>
+      <div class="nav-item" onclick="showPage('signalements',this)"><span class="nav-icon">🚨</span> Signalements <span class="nav-badge" id="badge-signalements">0</span></div>
+      <div class="nav-item" onclick="showPage('utilisateurs',this)"><span class="nav-icon">👥</span> Utilisateurs</div>
+      <div class="nav-section">Système</div>
+      <div class="nav-item" onclick="showPage('parametres',this)"><span class="nav-icon">⚙️</span> Paramètres</div>
+    </nav>
+    <div class="sidebar-user">
+      <div class="user-avatar" id="user-initials">IC</div>
+      <div>
+        <div class="user-name" id="user-name">Chargement...</div>
+        <div class="user-role">Super Administrateur</div>
+      </div>
+      <button class="logout-btn" onclick="logout()" title="Déconnexion">⏻</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="topbar-title" id="page-title">Tableau de bord</div>
+        <div class="topbar-sub" id="page-sub">Chargement des données...</div>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn btn-primary" onclick="openModal('ecole')">+ Nouvelle école</button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- DASHBOARD -->
+      <div class="page active" id="page-dashboard">
+        <div id="loading-dashboard" class="loading">
+          <div class="spinner-big"></div>
+          Chargement des données...
+        </div>
+        <div id="content-dashboard" style="display:none">
+          <div class="section-label" id="dashboard-label">Plateforme EduManager — Guinée 🇬🇳</div>
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-accent" style="background:#7F77DD"></div>
+              <div class="stat-label">Écoles actives</div>
+              <div class="stat-value" id="stat-ecoles">0</div>
+              <div class="stat-change">Sur la plateforme</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-accent" style="background:#185FA5"></div>
+              <div class="stat-label">Total élèves</div>
+              <div class="stat-value" id="stat-eleves">0</div>
+              <div class="stat-change">Inscrits</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-accent" style="background:#1D9E75"></div>
+              <div class="stat-label">Revenus validés</div>
+              <div class="stat-value" id="stat-revenus">0</div>
+              <div class="stat-change">GNF</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-accent" style="background:#EF9F27"></div>
+              <div class="stat-label">Paiements en attente</div>
+              <div class="stat-value" id="stat-paiements">0</div>
+              <div class="stat-change">À valider</div>
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="card">
+              <div class="card-title">Écoles enregistrées <span class="card-link" onclick="showPage('ecoles',null)">Voir toutes →</span></div>
+              <div id="liste-ecoles-dashboard">
+                <div class="loading">Chargement...</div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-title">Paiements récents <span class="card-link" onclick="showPage('paiements',null)">Voir tous →</span></div>
+              <div id="liste-paiements-dashboard">
+                <div class="loading">Chargement...</div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Signalements de harcèlement récents <span class="card-link" onclick="showPage('signalements',null)">Voir tous →</span></div>
+            <div id="liste-signalements-dashboard">
+              <div class="loading">Chargement...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ÉCOLES -->
+      <div class="page" id="page-ecoles">
+        <div class="section-label">Gestion des établissements</div>
+        <div class="card">
+          <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
+            <input type="text" id="search-ecoles" placeholder="Rechercher une école..." oninput="filtrerEcoles()" style="flex:1;min-width:180px;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px"/>
+            <select id="filter-ville" onchange="filtrerEcoles()" style="padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff">
+              <option value="">Toutes les villes</option>
+              <option>Conakry</option><option>Kindia</option><option>Labé</option>
+              <option>Kankan</option><option>Mamou</option><option>Boké</option>
+              <option>Faranah</option><option>Nzérékoré</option><option>Siguiri</option>
+            </select>
+            <select id="filter-plan" onchange="filtrerEcoles()" style="padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff">
+              <option value="">Tous les plans</option>
+              <option value="gratuit">Gratuit</option>
+              <option value="standard">Standard</option>
+              <option value="premium">Premium</option>
+            </select>
+            <button class="btn btn-primary" onclick="openModal('ecole')">+ Ajouter une école</button>
+          </div>
+          <div id="loading-ecoles" class="loading"><div class="spinner-big"></div>Chargement...</div>
+          <table id="table-ecoles" style="display:none">
+            <thead><tr>
+              <th>École</th><th>Ville</th><th>Code</th>
+              <th>Élèves</th><th>Plan</th><th>Statut</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="tbody-ecoles"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ABONNEMENTS -->
+      <div class="page" id="page-abonnements">
+        <div class="section-label">Plans et tarifs — Devise : GNF</div>
+        <div class="grid3" style="margin-bottom:24px">
+          <div class="card" style="border-top:3px solid #888;margin-bottom:0">
+            <div style="font-size:15px;font-weight:700;color:#555;margin-bottom:6px">Gratuit</div>
+            <div style="font-size:32px;font-weight:800;margin-bottom:4px">0 <span style="font-size:14px;font-weight:400;color:#888">GNF</span></div>
+            <div style="font-size:12px;color:#888;margin-bottom:14px">/mois</div>
+            <div style="font-size:12px;color:#555;margin-bottom:6px">✓ 1 administrateur</div>
+            <div style="font-size:12px;color:#555;margin-bottom:6px">✓ 100 élèves maximum</div>
+            <div style="font-size:12px;color:#555">✓ Fonctions de base</div>
+          </div>
+          <div class="card" style="border-top:3px solid #185FA5;margin-bottom:0">
+            <div style="font-size:15px;font-weight:700;color:#185FA5;margin-bottom:6px">Standard</div>
+            <div style="font-size:32px;font-weight:800;margin-bottom:4px" id="prix-standard">500 000 <span style="font-size:14px;font-weight:400;color:#888">GNF</span></div>
+            <div style="font-size:12px;color:#888;margin-bottom:14px">/mois</div>
+            <div style="font-size:12px;color:#555;margin-bottom:6px">✓ 2 administrateurs</div>
+            <div style="font-size:12px;color:#555;margin-bottom:6px">✓ 500 élèves maximum</div>
+            <div style="font-size:12px;color:#555">✓ SMS + notifications</div>
+            <button class="btn" style="margin-top:14px;width:100%;font-size:12px" onclick="modifierPrix('standard')">Modifier le prix</button>
+          </div>
+          <div class="card" style="border-top:3px solid #7F77DD;margin-bottom:0">
+            <div style="font-size:15px;font-weight:700;color:#7F77DD;margin-bottom:6px">Premium</div>
+            <div style="font-size:32px;font-weight:800;margin-bottom:4px" id="prix-premium">1 500 000 <span style="font-size:14px;font-weight:400;color:#888">GNF</span></div>
+            <div style="font-size:12px;color:#888;margin-bottom:14px">/mois</div>
+            <div style="font-size:12px;color:#555;margin-bottom:6px">✓ 4 administrateurs</div>
+            <div style="font-size:12px;color:#555;margin-bottom:6px">✓ Élèves illimités</div>
+            <div style="font-size:12px;color:#555">✓ Toutes les fonctions</div>
+            <button class="btn" style="margin-top:14px;width:100%;font-size:12px" onclick="modifierPrix('premium')">Modifier le prix</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAIEMENTS -->
+      <div class="page" id="page-paiements">
+        <div class="section-label">Validation des paiements Orange Money / Visa / PayPal</div>
+        <div id="loading-paiements" class="loading"><div class="spinner-big"></div>Chargement...</div>
+        <div id="content-paiements"></div>
+      </div>
+
+      <!-- STATS -->
+      <div class="page" id="page-stats">
+        <div class="section-label">Statistiques globales de la plateforme</div>
+        <div id="loading-stats" class="loading"><div class="spinner-big"></div>Chargement...</div>
+        <div id="content-stats" style="display:none">
+          <div class="stats-grid">
+            <div class="stat-card"><div class="stat-accent" style="background:#185FA5"></div><div class="stat-label">Total utilisateurs</div><div class="stat-value" id="s-users">0</div></div>
+            <div class="stat-card"><div class="stat-accent" style="background:#1D9E75"></div><div class="stat-label">Total élèves</div><div class="stat-value" id="s-eleves">0</div></div>
+            <div class="stat-card"><div class="stat-accent" style="background:#EF9F27"></div><div class="stat-label">Total absences</div><div class="stat-value" id="s-absences">0</div></div>
+            <div class="stat-card"><div class="stat-accent" style="background:#7F77DD"></div><div class="stat-label">Pré-inscriptions</div><div class="stat-value" id="s-preinscriptions">0</div></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Répartition des plans</div>
+            <div id="repartition-plans"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TOP 100 -->
+      <div class="page" id="page-top100">
+        <div class="section-label">🏆 Les 100 meilleurs élèves de la plateforme</div>
+        <div id="loading-top100" class="loading"><div class="spinner-big"></div>Calcul en cours...</div>
+        <div class="card" style="display:none" id="card-top100">
+          <table>
+            <thead><tr><th>#</th><th>Élève</th><th>École</th><th>Classe</th><th>Moyenne</th></tr></thead>
+            <tbody id="tbody-top100"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SIGNALEMENTS -->
+      <div class="page" id="page-signalements">
+        <div class="section-label">🚨 Signalements anonymes de harcèlement</div>
+        <div id="loading-signalements" class="loading"><div class="spinner-big"></div>Chargement...</div>
+        <div id="content-signalements"></div>
+      </div>
+
+      <!-- UTILISATEURS -->
+      <div class="page" id="page-utilisateurs">
+        <div class="section-label">Tous les comptes de la plateforme</div>
+        <div id="loading-utilisateurs" class="loading"><div class="spinner-big"></div>Chargement...</div>
+        <div class="card">
+          <table>
+            <thead><tr><th>Utilisateur</th><th>Rôle</th><th>École</th><th>Téléphone</th><th>Dernière connexion</th><th>Statut</th></tr></thead>
+            <tbody id="tbody-utilisateurs"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- PARAMÈTRES -->
+      <div class="page" id="page-parametres">
+        <div class="section-label">Configuration de votre compte</div>
+        <div class="grid2">
+          <div class="card">
+            <div class="card-title">Informations personnelles</div>
+            <div class="field"><label>Nom complet</label><input type="text" id="param-nom" value="Ibrahima Cissé"/></div>
+            <div class="field"><label>Email</label><input type="email" value="ibra-cisse@outlook.fr" readonly style="background:#f9f9f9;color:#888"/></div>
+            <div class="field"><label>Téléphone</label><input type="tel" id="param-tel" placeholder="+224 620 000 000"/></div>
+            <button class="btn btn-primary" onclick="alert('Profil mis à jour !')">Enregistrer</button>
+          </div>
+          <div class="card">
+            <div class="card-title">Sécurité</div>
+            <div class="field"><label>Nouveau mot de passe</label><input type="password" id="new-mdp" placeholder="Min. 8 car. avec maj, chiffre, symbole"/></div>
+            <div class="field"><label>Confirmer</label><input type="password" id="conf-mdp" placeholder="••••••••"/></div>
+            <button class="btn btn-primary" onclick="changerMdp()">Changer le mot de passe</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NOUVELLE ÉCOLE -->
+<div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modal-content"></div>
+</div>
+
+<script src="supabase.js"></script>
+<script>
+// ============================================
+// INIT
+// ============================================
+let currentUser = null;
+let toutesEcoles = [];
+
+(async () => {
+  const demo = JSON.parse(localStorage.getItem('edu_user') || '{}');
+  if (demo.role === 'super_admin') {
+    currentUser = { nom: demo.nom || 'Admin', prenom: '', role: 'super_admin', demo: true };
+  } else {
+    try {
+      const { data: { session } } = await db.auth.getSession();
+      if (!session) { window.location.href = 'index.html'; return; }
+      currentUser = await getUtilisateur();
+      if (!currentUser || currentUser.role !== 'super_admin') {
+        window.location.href = 'index.html'; return;
+      }
+    } catch(e) {
+      window.location.href = 'index.html'; return;
+    }
+  }
+
+  // Afficher nom
+  const nom = currentUser.prenom || currentUser.nom || 'Admin';
+  document.getElementById('user-name').textContent = nom + ' ' + (currentUser.nom || '');
+  document.getElementById('user-initials').textContent = (nom[0] || 'A') + (currentUser.nom?.[0] || '');
+
+  // Charger dashboard
+  await chargerDashboard();
+})();
+
+// ============================================
+// NAVIGATION
+// ============================================
+const pageMeta = {
+  dashboard:     ['Tableau de bord', 'Vue globale de la plateforme'],
+  ecoles:        ['Écoles', 'Gestion des établissements'],
+  abonnements:   ['Abonnements', 'Plans et tarifs en GNF'],
+  paiements:     ['Paiements', 'Orange Money · Visa · PayPal'],
+  stats:         ['Statistiques', 'Données globales de la plateforme'],
+  top100:        ['Top 100 élèves', 'Les meilleurs élèves de la plateforme'],
+  signalements:  ['Signalements', 'Harcèlement — accès exclusif super admin'],
+  utilisateurs:  ['Utilisateurs', 'Tous les comptes'],
+  parametres:    ['Paramètres', 'Configuration du compte'],
+};
+
+async function showPage(id, navEl) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  if (navEl) navEl.classList.add('active');
+  const m = pageMeta[id] || [id, ''];
+  document.getElementById('page-title').textContent = m[0];
+  document.getElementById('page-sub').textContent = m[1];
+
+  // Charger les données selon la page
+  if (id === 'ecoles') await chargerEcoles();
+  if (id === 'paiements') await chargerPaiements();
+  if (id === 'stats') await chargerStats();
+  if (id === 'top100') await chargerTop100();
+  if (id === 'signalements') await chargerSignalements();
+  if (id === 'utilisateurs') await chargerUtilisateurs();
+}
+
+// ============================================
+// DASHBOARD
+// ============================================
+async function chargerDashboard() {
+  try {
+    const [ecoles, eleves, paiementsVal, paiementsAtt, signalements] = await Promise.all([
+      db.from('ecoles').select('*'),
+      db.from('eleves').select('id', { count: 'exact' }),
+      db.from('paiements').select('montant').eq('statut', 'valide'),
+      db.from('paiements').select('id', { count: 'exact' }).eq('statut', 'en_attente'),
+      db.from('signalements').select('id', { count: 'exact' }).eq('statut', 'nouveau'),
+    ]);
+
+    toutesEcoles = ecoles.data || [];
+    const revenu = (paiementsVal.data || []).reduce((s,p) => s + Number(p.montant), 0);
+
+    document.getElementById('stat-ecoles').textContent = toutesEcoles.length;
+    document.getElementById('stat-eleves').textContent = eleves.count || 0;
+    document.getElementById('stat-revenus').textContent = revenu.toLocaleString('fr-FR');
+    document.getElementById('stat-paiements').textContent = paiementsAtt.count || 0;
+    document.getElementById('badge-paiements').textContent = paiementsAtt.count || 0;
+    document.getElementById('badge-signalements').textContent = signalements.count || 0;
+    document.getElementById('page-sub').textContent = `${toutesEcoles.length} école(s) · ${new Date().toLocaleDateString('fr-FR', {day:'numeric',month:'long',year:'numeric'})}`;
+
+    // Liste écoles dans dashboard
+    const ecoleHtml = toutesEcoles.length === 0
+      ? '<div class="empty"><div class="empty-icon">🏫</div>Aucune école enregistrée.<br>Créez votre première école !</div>'
+      : toutesEcoles.slice(0,5).map(e => `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f5f5f0">
+          <div style="width:36px;height:36px;border-radius:8px;background:#EEEDFE;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🏫</div>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:500">${e.nom}</div>
+            <div style="font-size:11px;color:#888">${e.ville}${e.commune ? ' · ' + e.commune : ''}</div>
+          </div>
+          <span class="plan-pill plan-${e.plan}">${e.plan}</span>
+        </div>`).join('');
+    document.getElementById('liste-ecoles-dashboard').innerHTML = ecoleHtml;
+
+    // Paiements récents
+    const { data: pays } = await db.from('paiements').select('*, ecoles(nom)').order('created_at', { ascending: false }).limit(3);
+    const paysHtml = (pays || []).length === 0
+      ? '<div class="empty"><div class="empty-icon">💰</div>Aucun paiement pour l\'instant.</div>'
+      : (pays || []).map(p => `
+        <div class="paiement-row">
+          <div style="font-size:20px">${p.methode === 'orange_money' ? '🟠' : p.methode === 'paypal' ? '🔵' : '💳'}</div>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:500">${p.ecoles?.nom || 'École'}</div>
+            <div style="font-size:11px;color:#888">${Number(p.montant).toLocaleString('fr-FR')} GNF · ${p.plan_demande}</div>
+          </div>
+          <span class="badge ${p.statut==='valide'?'badge-ok':p.statut==='refuse'?'badge-err':'badge-warn'}">${p.statut}</span>
+        </div>`).join('');
+    document.getElementById('liste-paiements-dashboard').innerHTML = paysHtml;
+
+    // Signalements
+    const { data: sigs } = await db.from('signalements').select('*, ecoles(nom)').order('created_at', { ascending: false }).limit(3);
+    const sigHtml = (sigs || []).length === 0
+      ? '<div class="empty"><div class="empty-icon">✅</div>Aucun signalement actif.</div>'
+      : (sigs || []).map(s => `
+        <div class="signal-card ${s.statut === 'resolu' ? 'resolu' : ''}">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+            <span style="font-size:12px;font-weight:600;color:#791F1F">🚨 ${s.ecoles?.nom || 'École inconnue'}</span>
+            <span class="badge badge-err">${s.statut}</span>
+          </div>
+          <div style="font-size:13px;color:#555">${s.contenu}</div>
+          <div style="font-size:11px;color:#aaa;margin-top:6px">${new Date(s.created_at).toLocaleDateString('fr-FR')}</div>
+        </div>`).join('');
+    document.getElementById('liste-signalements-dashboard').innerHTML = sigHtml;
+
+    document.getElementById('loading-dashboard').style.display = 'none';
+    document.getElementById('content-dashboard').style.display = 'block';
+
+  } catch(e) {
+    document.getElementById('loading-dashboard').innerHTML = `<div style="color:#A32D2D">Erreur : ${e.message}</div>`;
+  }
+}
+
+// ============================================
+// ÉCOLES
+// ============================================
+async function chargerEcoles() {
+  document.getElementById('loading-ecoles').style.display = 'block';
+  document.getElementById('table-ecoles').style.display = 'none';
+  try {
+    const { data } = await db.from('ecoles').select('*').order('nom');
+    toutesEcoles = data || [];
+    afficherEcoles(toutesEcoles);
+    document.getElementById('loading-ecoles').style.display = 'none';
+    document.getElementById('table-ecoles').style.display = 'table';
+  } catch(e) {
+    document.getElementById('loading-ecoles').innerHTML = `<div style="color:#A32D2D">Erreur : ${e.message}</div>`;
+  }
+}
+
+function afficherEcoles(ecoles) {
+  const tbody = document.getElementById('tbody-ecoles');
+  if (ecoles.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;color:#aaa">Aucune école trouvée</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = ecoles.map(e => `
+    <tr>
+      <td>
+        <div style="font-weight:500">${e.nom}</div>
+        <div style="font-size:11px;color:#999">${e.email || ''}</div>
+      </td>
+      <td>${e.ville}${e.commune ? '<br><span style="font-size:11px;color:#aaa">'+e.commune+'</span>' : ''}</td>
+      <td><code style="font-size:11px;background:#f5f5f0;padding:2px 6px;border-radius:4px">${e.code_acces}</code></td>
+      <td>${e.max_eleves === 999999 ? '∞' : e.max_eleves}</td>
+      <td><span class="plan-pill plan-${e.plan}">${e.plan}</span></td>
+      <td><span class="badge ${e.abonnement_actif ? 'badge-ok' : 'badge-err'}">${e.abonnement_actif ? 'Active' : 'Inactive'}</span></td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="btn-sm" onclick="voirEcole('${e.id}')">Gérer</button>
+          <button class="btn-sm btn-danger" onclick="supprimerEcole('${e.id}','${e.nom}')">Supprimer</button>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+function filtrerEcoles() {
+  const search = document.getElementById('search-ecoles').value.toLowerCase();
+  const ville = document.getElementById('filter-ville').value;
+  const plan = document.getElementById('filter-plan').value;
+  const filtrees = toutesEcoles.filter(e =>
+    (!search || e.nom.toLowerCase().includes(search) || e.code_acces.toLowerCase().includes(search)) &&
+    (!ville || e.ville === ville) &&
+    (!plan || e.plan === plan)
+  );
+  afficherEcoles(filtrees);
+}
+
+async function supprimerEcole(id, nom) {
+  if (!confirm(`Supprimer définitivement "${nom}" ? Cette action est irréversible.`)) return;
+  await db.from('ecoles').delete().eq('id', id);
+  await chargerEcoles();
+  await chargerDashboard();
+}
+
+function voirEcole(id) {
+  const e = toutesEcoles.find(x => x.id === id);
+  if (!e) return;
+  openModal('voir-ecole', e);
+}
+
+// ============================================
+// PAIEMENTS
+// ============================================
+async function chargerPaiements() {
+  document.getElementById('loading-paiements').style.display = 'block';
+  document.getElementById('content-paiements').innerHTML = '';
+  try {
+    const { data } = await db.from('paiements').select('*, ecoles(nom,ville)').order('created_at', { ascending: false });
+    const paiements = data || [];
+    document.getElementById('loading-paiements').style.display = 'none';
+
+    if (paiements.length === 0) {
+      document.getElementById('content-paiements').innerHTML = '<div class="empty"><div class="empty-icon">💰</div>Aucun paiement enregistré.</div>';
+      return;
+    }
+
+    const html = paiements.map(p => `
+      <div class="card" style="margin-bottom:12px">
+        <div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap">
+          <div style="font-size:32px">${p.methode === 'orange_money' ? '🟠' : p.methode === 'paypal' ? '🔵' : '💳'}</div>
+          <div style="flex:1">
+            <div style="font-size:15px;font-weight:600">${p.ecoles?.nom || 'École'} — Plan ${p.plan_demande}</div>
+            <div style="font-size:13px;color:#888;margin-top:2px">${Number(p.montant).toLocaleString('fr-FR')} GNF · ${p.methode?.replace('_',' ')}</div>
+            ${p.reference_transaction ? `<div style="font-size:12px;margin-top:4px">Réf : <code style="background:#f5f5f0;padding:2px 6px;border-radius:4px">${p.reference_transaction}</code></div>` : ''}
+            <div style="font-size:11px;color:#aaa;margin-top:4px">${new Date(p.created_at).toLocaleDateString('fr-FR', {day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+            <span class="badge ${p.statut==='valide'?'badge-ok':p.statut==='refuse'?'badge-err':'badge-warn'} " style="font-size:12px;padding:5px 12px">${p.statut}</span>
+            ${p.statut === 'en_attente' ? `
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-primary" style="font-size:12px;padding:6px 12px" onclick="validerPaie('${p.id}','${p.ecole_id}','${p.plan_demande}')">✓ Valider</button>
+                <button class="btn btn-danger" style="font-size:12px;padding:6px 12px" onclick="refuserPaie('${p.id}')">✗ Refuser</button>
+              </div>` : ''}
+          </div>
+        </div>
+      </div>`).join('');
+    document.getElementById('content-paiements').innerHTML = html;
+  } catch(e) {
+    document.getElementById('loading-paiements').innerHTML = `<div style="color:#A32D2D">Erreur : ${e.message}</div>`;
+  }
+}
+
+async function validerPaie(paiementId, ecoleId, plan) {
+  if (!confirm(`Valider ce paiement et activer le plan ${plan} ?`)) return;
+  try {
+    await validerPaiement(paiementId, currentUser?.id, ecoleId, plan);
+    alert('✅ Paiement validé ! L\'abonnement de l\'école est activé.');
+    await chargerPaiements();
+    await chargerDashboard();
+  } catch(e) { alert('Erreur : ' + e.message); }
+}
+
+async function refuserPaie(paiementId) {
+  if (!confirm('Refuser ce paiement ?')) return;
+  await db.from('paiements').update({ statut: 'refuse' }).eq('id', paiementId);
+  await chargerPaiements();
+}
+
+// ============================================
+// STATISTIQUES
+// ============================================
+async function chargerStats() {
+  document.getElementById('loading-stats').style.display = 'block';
+  document.getElementById('content-stats').style.display = 'none';
+  try {
+    const [users, eleves, absences, preinsc, ecoles] = await Promise.all([
+      db.from('utilisateurs').select('id', { count: 'exact' }),
+      db.from('eleves').select('id', { count: 'exact' }),
+      db.from('absences').select('id', { count: 'exact' }),
+      db.from('preinscriptions').select('id', { count: 'exact' }),
+      db.from('ecoles').select('plan'),
+    ]);
+
+    document.getElementById('s-users').textContent = users.count || 0;
+    document.getElementById('s-eleves').textContent = eleves.count || 0;
+    document.getElementById('s-absences').textContent = absences.count || 0;
+    document.getElementById('s-preinscriptions').textContent = preinsc.count || 0;
+
+    const plans = (ecoles.data || []).reduce((acc, e) => { acc[e.plan] = (acc[e.plan]||0)+1; return acc; }, {});
+    const total = Object.values(plans).reduce((s,v) => s+v, 0) || 1;
+    const planHtml = Object.entries(plans).map(([plan, count]) => `
+      <div style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+          <span>${plan}</span><span style="font-weight:600">${count} école(s)</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width:${Math.round(count/total*100)}%;background:${plan==='premium'?'#7F77DD':plan==='standard'?'#185FA5':'#aaa'}"></div>
+        </div>
+      </div>`).join('');
+    document.getElementById('repartition-plans').innerHTML = planHtml || '<div style="color:#aaa">Aucune donnée</div>';
+
+    document.getElementById('loading-stats').style.display = 'none';
+    document.getElementById('content-stats').style.display = 'block';
+  } catch(e) {
+    document.getElementById('loading-stats').innerHTML = `<div style="color:#A32D2D">Erreur : ${e.message}</div>`;
+  }
+}
+
+// ============================================
+// TOP 100 ÉLÈVES
+// ============================================
+async function chargerTop100() {
+  document.getElementById('loading-top100').style.display = 'block';
+  document.getElementById('card-top100').style.display = 'none';
+  try {
+    const { data: notes } = await db.from('notes')
+      .select('eleve_id, valeur, eleves(nom, prenom, ecole_id, ecoles(nom), classes(nom))');
+
+    // Calculer moyenne par élève
+    const moyennes = {};
+    (notes || []).forEach(n => {
+      if (!moyennes[n.eleve_id]) moyennes[n.eleve_id] = { notes: [], info: n.eleves };
+      moyennes[n.eleve_id].notes.push(Number(n.valeur));
+    });
+
+    const classement = Object.entries(moyennes)
+      .map(([id, { notes, info }]) => ({
+        id, info,
+        moy: notes.reduce((s,v)=>s+v,0) / notes.length
+      }))
+      .sort((a,b) => b.moy - a.moy)
+      .slice(0, 100);
+
+    if (classement.length === 0) {
+      document.getElementById('loading-top100').innerHTML = '<div class="empty"><div class="empty-icon">🏆</div>Aucune note saisie pour l\'instant.</div>';
+      return;
+    }
+
+    const tbody = document.getElementById('tbody-top100');
+    tbody.innerHTML = classement.map((e, i) => `
+      <tr>
+        <td style="font-weight:700;color:${i===0?'#EF9F27':i===1?'#888':i===2?'#CD7F32':'#1a1a1a'}">${i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</td>
+        <td style="font-weight:500">${e.info?.prenom || ''} ${e.info?.nom || ''}</td>
+        <td style="color:#888;font-size:12px">${e.info?.ecoles?.nom || '—'}</td>
+        <td style="color:#888;font-size:12px">${e.info?.classes?.nom || '—'}</td>
+        <td style="font-weight:700;color:${e.moy>=14?'#3B6D11':e.moy>=10?'#185FA5':'#A32D2D'}">${e.moy.toFixed(2)}/20</td>
+      </tr>`).join('');
+
+    document.getElementById('loading-top100').style.display = 'none';
+    document.getElementById('card-top100').style.display = 'block';
+  } catch(e) {
+    document.getElementById('loading-top100').innerHTML = `<div style="color:#A32D2D">Erreur : ${e.message}</div>`;
+  }
+}
+
+// ============================================
+// SIGNALEMENTS
+// ============================================
+async function chargerSignalements() {
+  document.getElementById('loading-signalements').style.display = 'block';
+  document.getElementById('content-signalements').innerHTML = '';
+  try {
+    const { data } = await db.from('signalements').select('*, ecoles(nom,ville)').order('created_at', { ascending: false });
+    document.getElementById('loading-signalements').style.display = 'none';
+
+    if ((data||[]).length === 0) {
+      document.getElementById('content-signalements').innerHTML = '<div class="empty"><div class="empty-icon">✅</div>Aucun signalement pour l\'instant.</div>';
+      return;
+    }
+
+    const html = (data||[]).map(s => `
+      <div class="signal-card ${s.statut==='resolu'?'resolu':''}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:#791F1F">🚨 ${s.ecoles?.nom || 'École'} — ${s.ecoles?.ville || ''}</div>
+            <div style="font-size:11px;color:#aaa;margin-top:2px">${new Date(s.created_at).toLocaleDateString('fr-FR', {day:'numeric',month:'long',year:'numeric'})}</div>
+          </div>
+          <span class="badge ${s.statut==='nouveau'?'badge-err':s.statut==='en_cours'?'badge-warn':'badge-ok'}">${s.statut}</span>
+        </div>
+        <div style="font-size:13px;color:#333;line-height:1.6">${s.contenu}</div>
+        ${s.statut !== 'resolu' ? `
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="btn-sm" onclick="majSignalement('${s.id}','en_cours')">Prendre en charge</button>
+          <button class="btn-sm badge-ok" style="border-color:#C0DD97" onclick="majSignalement('${s.id}','resolu')">Marquer résolu</button>
+        </div>` : ''}
+      </div>`).join('');
+    document.getElementById('content-signalements').innerHTML = html;
+  } catch(e) {
+    document.getElementById('loading-signalements').innerHTML = `<div style="color:#A32D2D">Erreur : ${e.message}</div>`;
+  }
+}
+
+async function majSignalement(id, statut) {
+  await db.from('signalements').update({ statut }).eq('id', id);
+  await chargerSignalements();
+}
+
+// ============================================
+// UTILISATEURS
+// ============================================
+async function chargerUtilisateurs() {
+  try {
+    const { data } = await db.from('utilisateurs').select('*, ecoles(nom)').order('created_at', { ascending: false });
+    document.getElementById('loading-utilisateurs').style.display = 'none';
+    const roleBadge = { super_admin:'badge-purple', admin_ecole:'badge-info', professeur:'badge-ok', parent:'badge-warn', eleve:'badge-err' };
+    document.getElementById('tbody-utilisateurs').innerHTML = (data||[]).map(u => `
+      <tr>
+        <td>
+          <div style="font-weight:500">${u.prenom || ''} ${u.nom}</div>
+          <div style="font-size:11px;color:#999">${u.email}</div>
+        </td>
+        <td><span class="badge ${roleBadge[u.role]||''}">${u.role.replace('_',' ')}</span></td>
+        <td style="font-size:12px;color:#888">${u.ecoles?.nom || '—'}</td>
+        <td style="font-size:12px;color:#888">${u.telephone || '—'}</td>
+        <td style="font-size:12px;color:#888">${u.derniere_connexion ? new Date(u.derniere_connexion).toLocaleDateString('fr-FR') : 'Jamais'}</td>
+        <td><span class="badge ${u.actif?'badge-ok':'badge-err'}">${u.actif?'Actif':'Inactif'}</span></td>
+      </tr>`).join('');
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+// ============================================
+// MODALS
+// ============================================
+function openModal(type, data) {
+  let html = '';
+  if (type === 'ecole') {
+    html = `
+      <div class="modal-title">Créer une nouvelle école</div>
+      <div class="alert alert-err" id="modal-err"></div>
+      <div class="field-grid">
+        <div class="field"><label>Nom de l'établissement *</label><input type="text" id="m-nom" placeholder="Lycée Donka"/></div>
+        <div class="field"><label>Ville *</label>
+          <select id="m-ville">
+            <option value="">Sélectionner...</option>
+            <option>Conakry</option><option>Kindia</option><option>Labé</option>
+            <option>Kankan</option><option>Mamou</option><option>Boké</option>
+            <option>Faranah</option><option>Nzérékoré</option><option>Siguiri</option>
+            <option>Kissidougou</option><option>Gueckedou</option><option>Pita</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-grid">
+        <div class="field"><label>Commune</label><input type="text" id="m-commune" placeholder="Ratoma"/></div>
+        <div class="field"><label>Téléphone</label><input type="tel" id="m-tel" placeholder="+224 620 000 000"/></div>
+      </div>
+      <div class="field"><label>Email de contact</label><input type="email" id="m-email" placeholder="contact@ecole.gn"/></div>
+      <div class="field"><label>Plan d'abonnement</label>
+        <select id="m-plan">
+          <option value="gratuit">Gratuit — 0 GNF (100 élèves, 1 admin)</option>
+          <option value="standard">Standard — 500 000 GNF/mois (500 élèves, 2 admins)</option>
+          <option value="premium">Premium — 1 500 000 GNF/mois (illimité, 4 admins)</option>
+        </select>
+      </div>
+      <div class="field"><label>Nom du directeur</label><input type="text" id="m-directeur" placeholder="Mamadou Diallo"/></div>
+      <div class="field"><label>Email du directeur *</label><input type="email" id="m-dir-email" placeholder="directeur@ecole.gn"/></div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeModal()">Annuler</button>
+        <button class="btn btn-primary" onclick="creerNouvelleEcole()">Créer l'école</button>
+      </div>`;
+  } else if (type === 'voir-ecole' && data) {
+    html = `
+      <div class="modal-title">🏫 ${data.nom}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+        <div><div style="font-size:11px;color:#888;margin-bottom:3px">Ville</div><div style="font-size:14px;font-weight:500">${data.ville}</div></div>
+        <div><div style="font-size:11px;color:#888;margin-bottom:3px">Commune</div><div style="font-size:14px;font-weight:500">${data.commune||'—'}</div></div>
+        <div><div style="font-size:11px;color:#888;margin-bottom:3px">Code d'accès</div><code style="font-size:13px;background:#f5f5f0;padding:4px 8px;border-radius:6px">${data.code_acces}</code></div>
+        <div><div style="font-size:11px;color:#888;margin-bottom:3px">Plan</div><span class="plan-pill plan-${data.plan}">${data.plan}</span></div>
+        <div><div style="font-size:11px;color:#888;margin-bottom:3px">Élèves max</div><div style="font-size:14px;font-weight:500">${data.max_eleves===999999?'Illimités':data.max_eleves}</div></div>
+        <div><div style="font-size:11px;color:#888;margin-bottom:3px">Admins max</div><div style="font-size:14px;font-weight:500">${data.max_admins}</div></div>
+      </div>
+      <div style="background:#f9f9f9;border-radius:10px;padding:14px;margin-bottom:16px">
+        <div style="font-size:12px;color:#888;margin-bottom:6px">Changer le plan</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" style="font-size:12px" onclick="changerPlan('${data.id}','gratuit')">Gratuit</button>
+          <button class="btn btn-primary" style="font-size:12px" onclick="changerPlan('${data.id}','standard')">Standard</button>
+          <button class="btn btn-primary" style="font-size:12px" onclick="changerPlan('${data.id}','premium')">Premium</button>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeModal()">Fermer</button>
+        <button class="btn btn-danger" onclick="supprimerEcole('${data.id}','${data.nom}');closeModal()">Supprimer</button>
+      </div>`;
+  }
+  document.getElementById('modal-content').innerHTML = html;
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal-bg').classList.remove('open');
+}
+
+async function creerNouvelleEcole() {
+  const nom = document.getElementById('m-nom').value.trim();
+  const ville = document.getElementById('m-ville').value;
+  const commune = document.getElementById('m-commune').value.trim();
+  const tel = document.getElementById('m-tel').value.trim();
+  const email = document.getElementById('m-email').value.trim();
+  const plan = document.getElementById('m-plan').value;
+  const dirEmail = document.getElementById('m-dir-email').value.trim();
+
+  if (!nom || !ville || !dirEmail) {
+    const err = document.getElementById('modal-err');
+    err.textContent = 'Remplissez les champs obligatoires (nom, ville, email directeur).';
+    err.style.display = 'block';
+    return;
+  }
+
+  const limites = { gratuit:{max_admins:1,max_eleves:100}, standard:{max_admins:2,max_eleves:500}, premium:{max_admins:4,max_eleves:999999} };
+  const code = genererCode(nom);
+
+  try {
+    const { error } = await db.from('ecoles').insert([{
+      nom, ville, commune, telephone: tel, email, code_acces: code,
+      plan, abonnement_actif: true,
+      ...limites[plan]
+    }]);
+    if (error) throw error;
+    closeModal();
+    alert(`✅ École "${nom}" créée !\n\nCode d'accès : ${code}\nPartagez ce code avec le directeur pour qu'il puisse créer son compte.`);
+    await chargerDashboard();
+    await chargerEcoles();
+  } catch(e) {
+    const err = document.getElementById('modal-err');
+    err.textContent = 'Erreur : ' + e.message;
+    err.style.display = 'block';
+  }
+}
+
+async function changerPlan(ecoleId, plan) {
+  const limites = { gratuit:{max_admins:1,max_eleves:100}, standard:{max_admins:2,max_eleves:500}, premium:{max_admins:4,max_eleves:999999} };
+  await db.from('ecoles').update({ plan, ...limites[plan], abonnement_actif: true }).eq('id', ecoleId);
+  closeModal();
+  alert('Plan mis à jour !');
+  await chargerEcoles();
+  await chargerDashboard();
+}
+
+function modifierPrix(plan) {
+  const actuel = plan === 'standard' ? '500000' : '1500000';
+  const nouveau = prompt(`Nouveau prix pour le plan ${plan} (en GNF) :`, actuel);
+  if (nouveau) {
+    document.getElementById(`prix-${plan}`).innerHTML = `${Number(nouveau).toLocaleString('fr-FR')} <span style="font-size:14px;font-weight:400;color:#888">GNF</span>`;
+    alert('Prix mis à jour localement. Pour le sauvegarder en base, ajoutez une table "config_prix" dans Supabase.');
+  }
+}
+
+// ============================================
+// UTILITAIRES
+// ============================================
+function genererCode(nom) {
+  const ini = nom.split(' ').map(m=>m[0]).join('').toUpperCase().substring(0,3);
+  const annee = new Date().getFullYear();
+  const rand = Math.floor(Math.random()*999).toString().padStart(3,'0');
+  return `${ini}-${annee}-${rand}`;
+}
+
+async function changerMdp() {
+  const mdp = document.getElementById('new-mdp').value;
+  const conf = document.getElementById('conf-mdp').value;
+  if (mdp !== conf) { alert('Les mots de passe ne correspondent pas.'); return; }
+  const erreurs = validerMotDePasse(mdp);
+  if (erreurs.length > 0) { alert('Mot de passe trop faible : ' + erreurs[0]); return; }
+  const { error } = await db.auth.updateUser({ password: mdp });
+  if (error) { alert('Erreur : ' + error.message); return; }
+  alert('✅ Mot de passe modifié avec succès !');
+}
+
+async function logout() {
+  localStorage.removeItem('edu_user');
+  await db.auth.signOut();
+  window.location.href = 'index.html';
+}
+</script>
+</body>
+</html>

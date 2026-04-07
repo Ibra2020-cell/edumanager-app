@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EduManager — Professeur</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f0eb; color: #1a1a1a; }
+    .app { display: flex; height: 100vh; }
+    .sidebar { width: 230px; background: #1a0a2e; display: flex; flex-direction: column; flex-shrink: 0; }
+    .sidebar-logo { padding: 20px 16px; border-bottom: 1px solid #ffffff15; }
+    .logo-title { font-size: 15px; font-weight: 700; color: #fff; }
+    .logo-school { font-size: 12px; color: #ffffff70; margin-top: 3px; }
+    .logo-badge { display: inline-block; margin-top: 6px; font-size: 10px; padding: 2px 8px; border-radius: 20px; background: #7F77DD30; color: #CECBF6; border: 1px solid #7F77DD50; font-weight: 600; }
+    .nav { flex: 1; padding: 10px 0; overflow-y: auto; }
+    .nav-section { padding: 10px 16px 4px; font-size: 9px; color: #ffffff35; text-transform: uppercase; letter-spacing: 0.08em; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; cursor: pointer; font-size: 13px; color: #ffffff70; transition: all 0.15s; border-left: 2px solid transparent; }
+    .nav-item:hover { background: #ffffff08; color: #ffffffcc; }
+    .nav-item.active { background: #ffffff12; color: #fff; border-left-color: #7F77DD; font-weight: 500; }
+    .nav-icon { font-size: 15px; width: 20px; text-align: center; }
+    .sidebar-user { padding: 14px 16px; border-top: 1px solid #ffffff15; display: flex; align-items: center; gap: 10px; }
+    .user-avatar { width: 32px; height: 32px; border-radius: 50%; background: #7F77DD40; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #CECBF6; flex-shrink: 0; }
+    .user-name { font-size: 13px; font-weight: 500; color: #fff; }
+    .user-role { font-size: 10px; color: #CECBF6; }
+    .logout-btn { margin-left: auto; cursor: pointer; opacity: 0.5; color: #fff; background: none; border: none; font-size: 16px; }
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .topbar { background: #fff; border-bottom: 1px solid #e8e8e8; padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .topbar-title { font-size: 15px; font-weight: 600; }
+    .topbar-sub { font-size: 11px; color: #aaa; margin-top: 1px; }
+    .topbar-actions { display: flex; gap: 8px; }
+    .btn { padding: 7px 14px; border-radius: 8px; font-size: 13px; cursor: pointer; border: 1px solid #ddd; background: #fff; color: #1a1a1a; font-family: inherit; transition: background 0.15s; }
+    .btn:hover { background: #f5f5f0; }
+    .btn-primary { background: #534AB7; color: #fff; border-color: #534AB7; font-weight: 500; }
+    .btn-primary:hover { background: #3C3489; }
+    .btn-sm { padding: 4px 10px; font-size: 11px; border-radius: 6px; cursor: pointer; border: 1px solid #ddd; background: #fff; font-family: inherit; }
+    .btn-present { background: #EAF3DE; color: #3B6D11; border-color: #C0DD97; }
+    .btn-absent { background: #FCEBEB; color: #791F1F; border-color: #F09595; }
+    .btn-retard { background: #FAEEDA; color: #633806; border-color: #FAC775; }
+    .content { flex: 1; overflow-y: auto; padding: 24px; }
+    .page { display: none; }
+    .page.active { display: block; }
+    .section-label { font-size: 12px; color: #999; margin-bottom: 16px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+    .stat-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 12px; padding: 16px; position: relative; overflow: hidden; }
+    .stat-accent { position: absolute; top: 0; left: 0; right: 0; height: 3px; border-radius: 12px 12px 0 0; }
+    .stat-label { font-size: 12px; color: #999; margin-bottom: 6px; }
+    .stat-value { font-size: 24px; font-weight: 700; }
+    .stat-change { font-size: 11px; margin-top: 4px; color: #888; }
+    .grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 16px; }
+    .card { background: #fff; border: 1px solid #e8e8e8; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    .card-title { font-size: 14px; font-weight: 600; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead tr { border-bottom: 1px solid #e8e8e8; }
+    th { padding: 8px 0; font-weight: 500; color: #999; text-align: left; font-size: 11px; text-transform: uppercase; }
+    td { padding: 10px 0; border-bottom: 1px solid #f5f5f0; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    .badge { font-size: 10px; padding: 3px 8px; border-radius: 20px; font-weight: 500; }
+    .badge-ok { background: #EAF3DE; color: #3B6D11; }
+    .badge-warn { background: #FAEEDA; color: #633806; }
+    .badge-err { background: #FCEBEB; color: #791F1F; }
+    .badge-info { background: #E6F1FB; color: #0C447C; }
+    .badge-purple { background: #EEEDFE; color: #3C3489; }
+    .loading { text-align: center; padding: 32px; color: #aaa; font-size: 13px; }
+    .spinner { width: 28px; height: 28px; border: 3px solid #e8e8e8; border-top-color: #534AB7; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 10px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .empty { text-align: center; padding: 32px; color: #aaa; }
+    .empty-icon { font-size: 36px; margin-bottom: 10px; }
+    .ava { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; }
+    .cours-card { background: #EEEDFE; border: 1px solid #AFA9EC; border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; }
+    .appel-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f5f5f0; }
+    .appel-row:last-child { border-bottom: none; }
+    .note-input { width: 70px; padding: 5px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; text-align: center; font-family: inherit; }
+    .note-input:focus { border-color: #534AB7; outline: none; }
+    .comportement-stars { display: flex; gap: 4px; }
+    .star { font-size: 18px; cursor: pointer; opacity: 0.3; transition: opacity 0.15s; }
+    .star.active { opacity: 1; }
+    .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; }
+    .modal-bg.open { display: flex; }
+    .modal { background: #fff; border-radius: 14px; padding: 24px; width: 480px; max-width: 95vw; max-height: 90vh; overflow-y: auto; }
+    .modal-title { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+    .field { margin-bottom: 12px; }
+    .field label { font-size: 12px; color: #888; display: block; margin-bottom: 4px; }
+    .field input, .field select, .field textarea { width: 100%; padding: 9px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; font-family: inherit; outline: none; }
+    .field input:focus, .field select:focus { border-color: #534AB7; }
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .modal-actions { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
+    .progress-bar { height: 5px; border-radius: 4px; background: #f0f0f0; overflow: hidden; margin-top: 4px; }
+    .progress-fill { height: 100%; border-radius: 4px; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <div class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-title">EduManager 🇬🇳</div>
+      <div class="logo-school" id="school-name">Chargement...</div>
+      <div class="logo-badge">Professeur</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-section">Mon espace</div>
+      <div class="nav-item active" onclick="showPage('dashboard',this)"><span class="nav-icon">🏠</span> Tableau de bord</div>
+      <div class="nav-item" onclick="showPage('classes',this)"><span class="nav-icon">👥</span> Mes classes</div>
+      <div class="nav-item" onclick="showPage('appel',this)"><span class="nav-icon">📋</span> Faire l'appel</div>
+      <div class="nav-item" onclick="showPage('notes',this)"><span class="nav-icon">📊</span> Saisir les notes</div>
+      <div class="nav-item" onclick="showPage('comportement',this)"><span class="nav-icon">⭐</span> Comportement</div>
+      <div class="nav-item" onclick="showPage('devoirs',this)"><span class="nav-icon">📝</span> Devoirs & cahier</div>
+      <div class="nav-item" onclick="showPage('heures',this)"><span class="nav-icon">⏱️</span> Mes heures</div>
+      <div class="nav-section">Communication</div>
+      <div class="nav-item" onclick="showPage('messagerie',this)"><span class="nav-icon">✉️</span> Messagerie</div>
+      <div class="nav-item" onclick="showPage('annonces',this)"><span class="nav-icon">📢</span> Annonces</div>
+    </nav>
+    <div class="sidebar-user">
+      <div class="user-avatar" id="user-initials">--</div>
+      <div>
+        <div class="user-name" id="user-name">Chargement...</div>
+        <div class="user-role" id="user-matiere">Professeur</div>
+      </div>
+      <button class="logout-btn" onclick="logout()">⏻</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <div class="topbar-title" id="page-title">Tableau de bord</div>
+        <div class="topbar-sub" id="page-sub">Chargement...</div>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn btn-primary" id="action-btn" onclick="showPage('appel',null)">📋 Faire l'appel</button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- DASHBOARD -->
+      <div class="page active" id="page-dashboard">
+        <div id="load-dash" class="loading"><div class="spinner"></div>Chargement...</div>
+        <div id="cont-dash" style="display:none">
+          <div class="stats-grid">
+            <div class="stat-card"><div class="stat-accent" style="background:#7F77DD"></div><div class="stat-label">Mes classes</div><div class="stat-value" id="d-classes">0</div><div class="stat-change">Cette année</div></div>
+            <div class="stat-card"><div class="stat-accent" style="background:#185FA5"></div><div class="stat-label">Total élèves</div><div class="stat-value" id="d-eleves">0</div><div class="stat-change">Sous ma responsabilité</div></div>
+            <div class="stat-card"><div class="stat-accent" style="background:#EF9F27"></div><div class="stat-label">Notes à saisir</div><div class="stat-value" id="d-notes">0</div><div class="stat-change">En attente</div></div>
+            <div class="stat-card"><div class="stat-accent" style="background:#1D9E75"></div><div class="stat-label">Heures ce mois</div><div class="stat-value" id="d-heures">0</div><div class="stat-change">Effectuées</div></div>
+          </div>
+
+          <div class="grid2">
+            <div class="card">
+              <div class="card-title">Mes cours aujourd'hui</div>
+              <div id="cours-today">
+                <div class="cours-card">
+                  <div style="font-size:24px">📚</div>
+                  <div>
+                    <div style="font-size:13px;font-weight:600;color:#3C3489">Connectez-vous avec un vrai compte</div>
+                    <div style="font-size:11px;color:#888">pour voir votre emploi du temps</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-title">Absences récentes dans mes classes</div>
+              <div id="absences-prof"><div class="empty"><div class="empty-icon">✅</div>Aucune absence récente.</div></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Résultats de mes classes — Vue rapide</div>
+            <div id="resultats-rapides"><div class="loading">Chargement...</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MES CLASSES -->
+      <div class="page" id="page-classes">
+        <div id="load-classes" class="loading"><div class="spinner"></div>Chargement...</div>
+        <div id="cont-classes" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;display:none"></div>
+      </div>
+
+      <!-- APPEL -->
+      <div class="page" id="page-appel">
+        <div class="card">
+          <div class="card-title">📋 Faire l'appel</div>
+          <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+            <select id="appel-classe" onchange="chargerElevesAppel()" style="padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff;flex:1">
+              <option value="">Sélectionner une classe...</option>
+            </select>
+            <select id="appel-periode" style="padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff">
+              <option value="matin">Matin</option>
+              <option value="apres-midi">Après-midi</option>
+              <option value="journee">Journée entière</option>
+            </select>
+            <input type="date" id="appel-date" style="padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px"/>
+          </div>
+          <div id="load-appel" style="text-align:center;padding:24px;color:#aaa">Sélectionnez une classe pour commencer l'appel</div>
+          <div id="cont-appel" style="display:none">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <div style="font-size:12px;color:#888" id="appel-stats">0 présents · 0 absents</div>
+              <div style="display:flex;gap:6px">
+                <button class="btn-sm btn-present" onclick="tousPresents()">✅ Tous présents</button>
+              </div>
+            </div>
+            <div id="liste-appel"></div>
+            <button class="btn btn-primary" style="width:100%;margin-top:14px" onclick="enregistrerAppel()">✅ Enregistrer l'appel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- NOTES -->
+      <div class="page" id="page-notes">
+        <div class="card">
+          <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+            <select id="notes-classe" onchange="chargerNotesClasse()" style="padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff;flex:1">
+              <option value="">Sélectionner une classe...</option>
+            </select>
+            <select id="notes-matiere" style="padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff">
+              <option value="">Sélectionner une matière...</option>
+            </select>
+            <select id="notes-type" style="padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff">
+              <option value="trimestriel">Trimestriel</option>
+              <option value="mensuel">Mensuel</option>
+            </select>
+            <select id="notes-periode" style="padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff">
+              <option value="T1">Trimestre 1</option>
+              <option value="T2">Trimestre 2</option>
+              <option value="T3">Trimestre 3</option>
+              <option value="M1">Mois 1</option>
+              <option value="M2">Mois 2</option>
+              <option value="M3">Mois 3</option>
+            </select>
+          </div>
+          <div id="load-notes" style="text-align:center;padding:24px;color:#aaa">Sélectionnez une classe et une matière</div>
+          <div id="cont-notes" style="display:none">
+            <table>
+              <thead><tr><th>Élève</th><th>Note /20</th><th>Appréciation</th><th>Coefficient</th></tr></thead>
+              <tbody id="tbody-notes"></tbody>
+            </table>
+            <button class="btn btn-primary" style="width:100%;margin-top:14px" onclick="enregistrerNotes()">💾 Enregistrer les notes</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- COMPORTEMENT -->
+      <div class="page" id="page-comportement">
+        <div class="card">
+          <div style="display:flex;gap:8px;margin-bottom:16px">
+            <select id="comp-classe" onchange="chargerElevesComportement()" style="padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff;flex:1">
+              <option value="">Sélectionner une classe...</option>
+            </select>
+            <select id="comp-periode" style="padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff">
+              <option value="T1">Trimestre 1</option>
+              <option value="T2">Trimestre 2</option>
+              <option value="T3">Trimestre 3</option>
+            </select>
+          </div>
+          <div id="load-comp" style="text-align:center;padding:24px;color:#aaa">Sélectionnez une classe</div>
+          <div id="cont-comp" style="display:none">
+            <table>
+              <thead><tr><th>Élève</th><th>Note comportement</th><th>Commentaire</th></tr></thead>
+              <tbody id="tbody-comp"></tbody>
+            </table>
+            <button class="btn btn-primary" style="width:100%;margin-top:14px" onclick="enregistrerComportement()">💾 Enregistrer</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- DEVOIRS -->
+      <div class="page" id="page-devoirs">
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-title">Publier un devoir</div>
+          <div class="field-grid">
+            <div class="field"><label>Classe</label>
+              <select id="dev-classe" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff">
+                <option value="">Sélectionner...</option>
+              </select>
+            </div>
+            <div class="field"><label>À rendre le</label><input type="date" id="dev-date" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px"/></div>
+          </div>
+          <div class="field"><label>Description du devoir</label>
+            <textarea id="dev-desc" placeholder="Ex: Lire chapitre 5 et faire les exercices p.87..." style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;height:80px;resize:vertical;font-family:inherit"></textarea>
+          </div>
+          <button class="btn btn-primary" onclick="publierDevoir()">Publier le devoir</button>
+        </div>
+        <div class="card">
+          <div class="card-title">Devoirs publiés</div>
+          <div id="liste-devoirs"><div class="loading">Chargement...</div></div>
+        </div>
+      </div>
+
+      <!-- MES HEURES -->
+      <div class="page" id="page-heures">
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-title">Déclarer des heures effectuées</div>
+          <div class="field-grid">
+            <div class="field"><label>Classe</label>
+              <select id="h-classe" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff">
+                <option value="">Sélectionner...</option>
+              </select>
+            </div>
+            <div class="field"><label>Date du cours</label><input type="date" id="h-date" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px"/></div>
+          </div>
+          <div class="field"><label>Nombre d'heures</label>
+            <input type="number" id="h-heures" value="2" min="0.5" max="8" step="0.5" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px"/>
+          </div>
+          <button class="btn btn-primary" onclick="declarerHeures()">Déclarer ces heures</button>
+        </div>
+        <div class="card">
+          <div class="card-title">Mon récapitulatif d'heures</div>
+          <div id="recap-heures"><div class="loading"><div class="spinner"></div>Chargement...</div></div>
+        </div>
+      </div>
+
+      <!-- MESSAGERIE -->
+      <div class="page" id="page-messagerie">
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-title">Envoyer un message</div>
+          <div class="field"><label>Destinataire</label>
+            <select id="msg-dest" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff">
+              <option>Administration</option>
+              <option>Parent d'élève</option>
+            </select>
+          </div>
+          <div class="field"><label>Objet</label><input type="text" id="msg-objet" placeholder="Ex: Résultats du contrôle"/></div>
+          <div class="field"><label>Message</label><textarea id="msg-contenu" style="height:80px;resize:vertical" placeholder="Votre message..."></textarea></div>
+          <button class="btn btn-primary" onclick="alert('Message envoyé !')">Envoyer</button>
+        </div>
+        <div class="card">
+          <div class="card-title">Messages reçus</div>
+          <div class="empty"><div class="empty-icon">✉️</div>Aucun message pour l'instant.</div>
+        </div>
+      </div>
+
+      <!-- ANNONCES -->
+      <div class="page" id="page-annonces">
+        <div id="load-annonces" class="loading"><div class="spinner"></div>Chargement...</div>
+        <div id="cont-annonces"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://rcojerlzguwqpclyudjo.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjb2plcmx6Z3V3cXBjbHl1ZGpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NTg1MzIsImV4cCI6MjA5MTAzNDUzMn0.4R_NOrYLdhkVMKw87Z33FLS9LoAUAgVj_Uk_RBCf8tg';
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentUser = null;
+let ecoleId = null;
+let profId = null;
+let mesClasses = [];
+let mesEleves = {};
+let appelData = {};
+let notesData = {};
+let compData = {};
+
+// ============================================
+// INIT
+// ============================================
+(async () => {
+  const demo = JSON.parse(localStorage.getItem('edu_user') || '{}');
+  if (demo.role === 'professeur') {
+    currentUser = { ...demo, demo: true };
+    const { data: ecoles } = await db.from('ecoles').select('*').limit(1);
+    if (ecoles?.length) {
+      ecoleId = ecoles[0].id;
+      document.getElementById('school-name').textContent = ecoles[0].nom;
+    }
+  } else {
+    try {
+      const { data: { session } } = await db.auth.getSession();
+      if (!session) { window.location.href = 'index.html'; return; }
+      const { data: u } = await db.from('utilisateurs').select('*, ecoles(*)').eq('id', session.user.id).maybeSingle();
+      if (!u || u.role !== 'professeur') { window.location.href = 'index.html'; return; }
+      currentUser = u; ecoleId = u.ecole_id; profId = u.id;
+      document.getElementById('school-name').textContent = u.ecoles?.nom || '';
+    } catch(e) { window.location.href = 'index.html'; return; }
+  }
+
+  const nom = currentUser.nom || 'Professeur';
+  const prenom = currentUser.prenom || '';
+  document.getElementById('user-name').textContent = `${prenom} ${nom}`.trim();
+  document.getElementById('user-initials').textContent = `${prenom[0]||''}${nom[0]||''}`.toUpperCase();
+
+  // Date appel par défaut
+  document.getElementById('appel-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('h-date').value = new Date().toISOString().split('T')[0];
+
+  await chargerDashboard();
+  await peuplerSelectClasses();
+})();
+
+// ============================================
+// NAVIGATION
+// ============================================
+const pageMeta = {
+  dashboard:    ['Tableau de bord', 'Vue générale'],
+  classes:      ['Mes classes', 'Élèves et résultats'],
+  appel:        ['Faire l\'appel', 'Présences du jour'],
+  notes:        ['Saisir les notes', 'Résultats par classe'],
+  comportement: ['Comportement', 'Évaluation des élèves'],
+  devoirs:      ['Devoirs & cahier de texte', 'Exercices publiés'],
+  heures:       ['Mes heures', 'Volume horaire effectué'],
+  messagerie:   ['Messagerie', 'Communication'],
+  annonces:     ['Annonces', 'Publications de l\'école'],
+};
+
+function showPage(id, navEl) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  if (navEl) navEl.classList.add('active');
+  const m = pageMeta[id] || [id, ''];
+  document.getElementById('page-title').textContent = m[0];
+  document.getElementById('page-sub').textContent = m[1];
+  if (id === 'classes') chargerMesClasses();
+  if (id === 'heures') chargerMesHeures();
+  if (id === 'annonces') chargerAnnonces();
+}
+
+// ============================================
+// PEUPLER LES SELECTS
+// ============================================
+async function peuplerSelectClasses() {
+  if (!ecoleId) return;
+  const { data } = await db.from('classes').select('id,nom').eq('ecole_id', ecoleId).order('nom');
+  mesClasses = data || [];
+  const opt = '<option value="">Sélectionner...</option>' + mesClasses.map(c => `<option value="${c.id}">${c.nom}</option>`).join('');
+  ['appel-classe','notes-classe','comp-classe','dev-classe','h-classe'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = opt;
+  });
+
+  // Matières
+  const { data: mats } = await db.from('matieres').select('id,nom,coefficient').eq('ecole_id', ecoleId);
+  const optMat = '<option value="">Sélectionner...</option>' + (mats||[]).map(m => `<option value="${m.id}" data-coef="${m.coefficient}">${m.nom} (coef.${m.coefficient})</option>`).join('');
+  const selMat = document.getElementById('notes-matiere');
+  if (selMat) selMat.innerHTML = optMat;
+}
+
+// ============================================
+// DASHBOARD
+// ============================================
+async function chargerDashboard() {
+  try {
+    const nbClasses = mesClasses.length || 0;
+    document.getElementById('d-classes').textContent = nbClasses;
+    document.getElementById('d-eleves').textContent = '—';
+    document.getElementById('d-notes').textContent = '—';
+    document.getElementById('d-heures').textContent = '—';
+
+    if (ecoleId) {
+      const { data: absRec } = await db.from('absences')
+        .select('*, eleves(nom,prenom), classes(nom)')
+        .eq('ecole_id', ecoleId)
+        .order('date_absence', { ascending: false })
+        .limit(4);
+
+      const absHtml = (absRec||[]).length === 0
+        ? '<div class="empty"><div class="empty-icon">✅</div>Aucune absence récente.</div>'
+        : (absRec||[]).map(a => `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f5f5f0">
+            <div><div style="font-size:13px;font-weight:500">${a.eleves?.prenom||''} ${a.eleves?.nom||''}</div>
+            <div style="font-size:11px;color:#888">${a.classes?.nom||'—'} · ${new Date(a.date_absence).toLocaleDateString('fr-FR')}</div></div>
+            <span class="badge ${a.justifiee?'badge-ok':'badge-warn'}">${a.justifiee?'Justifiée':'Non justifiée'}</span>
+          </div>`).join('');
+      document.getElementById('absences-prof').innerHTML = absHtml;
+
+      // Résultats rapides
+      const { data: notes } = await db.from('notes').select('valeur, classes(nom)').eq('ecole_id', ecoleId);
+      if ((notes||[]).length > 0) {
+        const parClasse = {};
+        notes.forEach(n => {
+          const cn = n.classes?.nom || '—';
+          if (!parClasse[cn]) parClasse[cn] = [];
+          parClasse[cn].push(Number(n.valeur));
+        });
+        document.getElementById('resultats-rapides').innerHTML = Object.entries(parClasse).map(([nom, vals]) => {
+          const moy = (vals.reduce((s,v)=>s+v,0)/vals.length).toFixed(1);
+          return `<div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>${nom}</span><span style="font-weight:600;color:${moy>=10?'#3B6D11':'#A32D2D'}">${moy}/20</span></div>
+            <div class="progress-bar"><div class="progress-fill" style="width:${moy*5}%;background:${moy>=14?'#1D9E75':moy>=10?'#185FA5':'#E24B4A'}"></div></div>
+          </div>`;
+        }).join('');
+      } else {
+        document.getElementById('resultats-rapides').innerHTML = '<div class="empty">Aucune note saisie.</div>';
+      }
+    }
+
+    document.getElementById('load-dash').style.display = 'none';
+    document.getElementById('cont-dash').style.display = 'block';
+  } catch(e) {
+    document.getElementById('load-dash').innerHTML = `<div style="color:#A32D2D;text-align:center;padding:20px">Erreur : ${e.message}</div>`;
+  }
+}
+
+// ============================================
+// MES CLASSES
+// ============================================
+async function chargerMesClasses() {
+  document.getElementById('load-classes').style.display = 'block';
+  document.getElementById('cont-classes').style.display = 'none';
+  if (!ecoleId) return;
+  const { data: classes } = await db.from('classes').select('*').eq('ecole_id', ecoleId);
+  const html = (classes||[]).length === 0
+    ? '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">👥</div>Aucune classe.</div>'
+    : await Promise.all((classes||[]).map(async c => {
+        const { count } = await db.from('eleves').select('id', { count: 'exact' }).eq('classe_id', c.id);
+        return `<div class="card" style="margin-bottom:0">
+          <div style="font-size:16px;font-weight:700;color:#3C3489;margin-bottom:4px">${c.nom}</div>
+          <div style="font-size:12px;color:#888;margin-bottom:8px">${c.niveau} · ${c.annee_scolaire}</div>
+          <div style="font-size:13px;margin-bottom:10px"><span style="font-weight:600">${count||0}</span> élèves</div>
+          <button class="btn-sm" onclick="voirElevesClasse('${c.id}','${c.nom}')">Voir les élèves</button>
+        </div>`;
+      }));
+  document.getElementById('cont-classes').innerHTML = Array.isArray(html) ? html.join('') : html;
+  document.getElementById('load-classes').style.display = 'none';
+  document.getElementById('cont-classes').style.display = 'grid';
+}
+
+// ============================================
+// APPEL
+// ============================================
+async function chargerElevesAppel() {
+  const classeId = document.getElementById('appel-classe').value;
+  if (!classeId) return;
+  const { data: eleves } = await db.from('eleves').select('id,nom,prenom').eq('classe_id', classeId).eq('statut','actif').order('nom');
+  appelData = {};
+  (eleves||[]).forEach(e => appelData[e.id] = 'present');
+  majStatsAppel();
+
+  document.getElementById('liste-appel').innerHTML = (eleves||[]).map(e => `
+    <div class="appel-row" id="row-${e.id}">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="ava" style="background:#EEEDFE;color:#3C3489">${(e.prenom?.[0]||'')+(e.nom?.[0]||'')}</div>
+        <span style="font-size:13px;font-weight:500">${e.prenom} ${e.nom}</span>
+      </div>
+      <div style="display:flex;gap:5px">
+        <button class="btn-sm btn-present" id="bp-${e.id}" onclick="setStatut('${e.id}','present')">✅ Présent</button>
+        <button class="btn-sm" id="ba-${e.id}" onclick="setStatut('${e.id}','absent')">❌ Absent</button>
+        <button class="btn-sm" id="br-${e.id}" onclick="setStatut('${e.id}','retard')">⏰ Retard</button>
+      </div>
+    </div>`).join('');
+
+  document.getElementById('load-appel').style.display = 'none';
+  document.getElementById('cont-appel').style.display = 'block';
+}
+
+function setStatut(id, statut) {
+  appelData[id] = statut;
+  document.getElementById(`bp-${id}`).className = `btn-sm ${statut==='present'?'btn-present':''}`;
+  document.getElementById(`ba-${id}`).className = `btn-sm ${statut==='absent'?'btn-absent':''}`;
+  document.getElementById(`br-${id}`).className = `btn-sm ${statut==='retard'?'btn-retard':''}`;
+  majStatsAppel();
+}
+
+function majStatsAppel() {
+  const vals = Object.values(appelData);
+  const p = vals.filter(v=>v==='present').length;
+  const a = vals.filter(v=>v==='absent').length;
+  const r = vals.filter(v=>v==='retard').length;
+  document.getElementById('appel-stats').textContent = `${p} présents · ${a} absents · ${r} retards`;
+}
+
+function tousPresents() {
+  Object.keys(appelData).forEach(id => setStatut(id, 'present'));
+}
+
+async function enregistrerAppel() {
+  const classeId = document.getElementById('appel-classe').value;
+  const periode = document.getElementById('appel-periode').value;
+  const dateAppel = document.getElementById('appel-date').value;
+  if (!classeId) return alert('Sélectionnez une classe.');
+
+  const absents = Object.entries(appelData).filter(([,v]) => v === 'absent' || v === 'retard');
+  if (absents.length === 0) { alert('✅ Tout le monde est présent ! Aucune absence à enregistrer.'); return; }
+
+  const insertions = absents.map(([eleveId, statut]) => ({
+    ecole_id: ecoleId, eleve_id: eleveId, classe_id: classeId,
+    date_absence: dateAppel, periode,
+    justifiee: false, sms_envoye: false
+  }));
+
+  await db.from('absences').insert(insertions);
+  alert(`✅ Appel enregistré ! ${absents.length} absence(s) signalée(s).\n📱 Les parents seront notifiés.`);
+}
+
+// ============================================
+// NOTES
+// ============================================
+async function chargerNotesClasse() {
+  const classeId = document.getElementById('notes-classe').value;
+  if (!classeId) return;
+  const { data: eleves } = await db.from('eleves').select('id,nom,prenom').eq('classe_id', classeId).order('nom');
+  notesData = {};
+
+  document.getElementById('tbody-notes').innerHTML = (eleves||[]).map(e => {
+    notesData[e.id] = { note: '', appreciation: '' };
+    return `<tr>
+      <td style="font-weight:500">${e.prenom} ${e.nom}</td>
+      <td><input class="note-input" type="number" id="note-${e.id}" min="0" max="20" step="0.25" placeholder="—" oninput="notesData['${e.id}'].note=this.value"/></td>
+      <td><input type="text" id="app-${e.id}" placeholder="Appréciation..." style="padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;width:200px" oninput="notesData['${e.id}'].appreciation=this.value"/></td>
+      <td style="color:#888;font-size:12px" id="coef-display">—</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('load-notes').style.display = 'none';
+  document.getElementById('cont-notes').style.display = 'block';
+
+  // Mettre à jour coefficient affiché
+  document.getElementById('notes-matiere').onchange = () => {
+    const sel = document.getElementById('notes-matiere');
+    const coef = sel.options[sel.selectedIndex]?.dataset?.coef || '—';
+    document.querySelectorAll('#coef-display').forEach(el => el.textContent = `× ${coef}`);
+  };
+}
+
+async function enregistrerNotes() {
+  const classeId = document.getElementById('notes-classe').value;
+  const matiereId = document.getElementById('notes-matiere').value;
+  const typeEval = document.getElementById('notes-type').value;
+  const periode = document.getElementById('notes-periode').value;
+
+  if (!classeId || !matiereId) return alert('Sélectionnez une classe et une matière.');
+
+  const insertions = Object.entries(notesData)
+    .filter(([,v]) => v.note !== '' && v.note !== null)
+    .map(([eleveId, v]) => ({
+      ecole_id: ecoleId,
+      eleve_id: eleveId,
+      matiere_id: matiereId,
+      professeur_id: profId || null,
+      classe_id: classeId,
+      valeur: parseFloat(v.note),
+      type_eval: typeEval,
+      periode,
+      appreciation: v.appreciation || null
+    }));
+
+  if (insertions.length === 0) return alert('Aucune note à enregistrer.');
+  const { error } = await db.from('notes').insert(insertions);
+  if (error) return alert('Erreur : ' + error.message);
+  alert(`✅ ${insertions.length} note(s) enregistrée(s) avec succès !`);
+}
+
+// ============================================
+// COMPORTEMENT
+// ============================================
+async function chargerElevesComportement() {
+  const classeId = document.getElementById('comp-classe').value;
+  if (!classeId) return;
+  const { data: eleves } = await db.from('eleves').select('id,nom,prenom').eq('classe_id', classeId).order('nom');
+  compData = {};
+
+  document.getElementById('tbody-comp').innerHTML = (eleves||[]).map(e => {
+    compData[e.id] = { note: 3, commentaire: '' };
+    return `<tr>
+      <td style="font-weight:500">${e.prenom} ${e.nom}</td>
+      <td>
+        <div class="comportement-stars" id="stars-${e.id}">
+          ${[1,2,3,4,5].map(i => `<span class="star ${i<=3?'active':''}" onclick="setEtoiles('${e.id}',${i})">★</span>`).join('')}
+        </div>
+      </td>
+      <td><input type="text" id="comp-comm-${e.id}" placeholder="Commentaire..." style="padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;width:180px" oninput="compData['${e.id}'].commentaire=this.value"/></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('load-comp').style.display = 'none';
+  document.getElementById('cont-comp').style.display = 'block';
+}
+
+function setEtoiles(eleveId, note) {
+  compData[eleveId].note = note;
+  const stars = document.querySelectorAll(`#stars-${eleveId} .star`);
+  stars.forEach((s, i) => s.classList.toggle('active', i < note));
+}
+
+async function enregistrerComportement() {
+  const classeId = document.getElementById('comp-classe').value;
+  const periode = document.getElementById('comp-periode').value;
+  if (!classeId) return alert('Sélectionnez une classe.');
+
+  const insertions = Object.entries(compData).map(([eleveId, v]) => ({
+    ecole_id: ecoleId, eleve_id: eleveId,
+    professeur_id: profId || null,
+    note_comportement: v.note,
+    commentaire: v.commentaire || null,
+    periode
+  }));
+
+  await db.from('comportements').insert(insertions);
+  alert('✅ Évaluations de comportement enregistrées !');
+}
+
+// ============================================
+// DEVOIRS
+// ============================================
+async function publierDevoir() {
+  const classeId = document.getElementById('dev-classe').value;
+  const desc = document.getElementById('dev-desc').value.trim();
+  const date = document.getElementById('dev-date').value;
+  if (!classeId || !desc) return alert('Sélectionnez une classe et décrivez le devoir.');
+  // Stocker dans annonces avec tag [DEVOIR]
+  await db.from('annonces').insert([{
+    ecole_id: ecoleId, auteur_id: profId || null,
+    titre: `[DEVOIR] ${document.getElementById('dev-classe').options[document.getElementById('dev-classe').selectedIndex].text} — ${date || 'À définir'}`,
+    contenu: desc, destinataires: 'eleves'
+  }]);
+  alert('✅ Devoir publié aux élèves !');
+  document.getElementById('dev-desc').value = '';
+  chargerListeDevoirs();
+}
+
+async function chargerListeDevoirs() {
+  if (!ecoleId) return;
+  const { data } = await db.from('annonces').select('*').eq('ecole_id', ecoleId).like('titre','[DEVOIR]%').order('created_at', { ascending: false });
+  document.getElementById('liste-devoirs').innerHTML = (data||[]).length === 0
+    ? '<div class="empty"><div class="empty-icon">📝</div>Aucun devoir publié.</div>'
+    : (data||[]).map(d => `
+      <div style="padding:10px 0;border-bottom:1px solid #f5f5f0">
+        <div style="font-size:13px;font-weight:600;color:#3C3489">${d.titre.replace('[DEVOIR] ','')}</div>
+        <div style="font-size:12px;color:#555;margin-top:3px">${d.contenu}</div>
+        <div style="font-size:11px;color:#aaa;margin-top:3px">${new Date(d.created_at).toLocaleDateString('fr-FR')}</div>
+      </div>`).join('');
+}
+
+// ============================================
+// HEURES
+// ============================================
+async function declarerHeures() {
+  const classeId = document.getElementById('h-classe').value;
+  const date = document.getElementById('h-date').value;
+  const heures = parseFloat(document.getElementById('h-heures').value);
+  if (!classeId || !date || !heures) return alert('Remplissez tous les champs.');
+  await db.from('heures_profs').insert([{
+    ecole_id: ecoleId, professeur_id: profId || null,
+    classe_id: classeId, date_cours: date, heures
+  }]);
+  alert(`✅ ${heures}h déclarées avec succès !`);
+  await chargerMesHeures();
+}
+
+async function chargerMesHeures() {
+  if (!ecoleId) return;
+  const { data } = await db.from('heures_profs').select('*, classes(nom)').eq('ecole_id', ecoleId).order('date_cours', { ascending: false }).limit(20);
+
+  const total = (data||[]).reduce((s,h) => s+Number(h.heures), 0);
+  const moisCourant = new Date().getMonth();
+  const mois = (data||[]).filter(h => new Date(h.date_cours).getMonth() === moisCourant).reduce((s,h) => s+Number(h.heures), 0);
+
+  document.getElementById('d-heures').textContent = mois + 'h';
+  document.getElementById('recap-heures').innerHTML = `
+    <div style="display:flex;gap:12px;margin-bottom:16px">
+      <div style="flex:1;background:#EEEDFE;border-radius:10px;padding:14px;text-align:center">
+        <div style="font-size:11px;color:#534AB7;margin-bottom:4px">Ce mois</div>
+        <div style="font-size:24px;font-weight:700;color:#3C3489">${mois}h</div>
+      </div>
+      <div style="flex:1;background:#f9f9f9;border-radius:10px;padding:14px;text-align:center">
+        <div style="font-size:11px;color:#888;margin-bottom:4px">Total</div>
+        <div style="font-size:24px;font-weight:700">${total}h</div>
+      </div>
+    </div>
+    ${(data||[]).length === 0 ? '<div class="empty">Aucune heure déclarée.</div>' :
+    `<table><thead><tr><th>Date</th><th>Classe</th><th>Heures</th></tr></thead><tbody>
+    ${(data||[]).map(h => `<tr><td style="color:#888;font-size:12px">${new Date(h.date_cours).toLocaleDateString('fr-FR')}</td><td>${h.classes?.nom||'—'}</td><td style="font-weight:600">${h.heures}h</td></tr>`).join('')}
+    </tbody></table>`}`;
+}
+
+// ============================================
+// ANNONCES
+// ============================================
+async function chargerAnnonces() {
+  if (!ecoleId) return;
+  const { data } = await db.from('annonces').select('*').eq('ecole_id', ecoleId).not('titre','like','[DEVOIR]%').order('created_at', { ascending: false });
+  document.getElementById('load-annonces').style.display = 'none';
+  document.getElementById('cont-annonces').innerHTML = (data||[]).length === 0
+    ? '<div class="empty"><div class="empty-icon">📢</div>Aucune annonce.</div>'
+    : (data||[]).map(a => `
+      <div class="card" style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <div style="font-size:14px;font-weight:600">${a.titre}</div>
+          <span class="badge badge-purple">${a.destinataires}</span>
+        </div>
+        <div style="font-size:13px;color:#555">${a.contenu}</div>
+        <div style="font-size:11px;color:#aaa;margin-top:6px">${new Date(a.created_at).toLocaleDateString('fr-FR')}</div>
+      </div>`).join('');
+}
+
+// ============================================
+// UTILITAIRES
+// ============================================
+async function voirElevesClasse(classeId, nom) {
+  const { data } = await db.from('eleves').select('*').eq('classe_id', classeId).order('nom');
+  alert(`${nom} — ${(data||[]).length} élèves :\n\n${(data||[]).map(e=>`• ${e.prenom} ${e.nom}`).join('\n')}`);
+}
+
+async function logout() {
+  localStorage.removeItem('edu_user');
+  await db.auth.signOut();
+  window.location.href = 'index.html';
+}
+</script>
+</body>
+</html>

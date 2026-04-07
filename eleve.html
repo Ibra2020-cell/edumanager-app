@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EduManager — Espace Élève</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f0eb; color: #1a1a1a; }
+    .app { display: flex; height: 100vh; }
+    .sidebar { width: 230px; background: #2a1a00; display: flex; flex-direction: column; flex-shrink: 0; }
+    .sidebar-logo { padding: 20px 16px; border-bottom: 1px solid #ffffff15; }
+    .logo-title { font-size: 15px; font-weight: 700; color: #fff; }
+    .logo-school { font-size: 12px; color: #ffffff70; margin-top: 3px; }
+    .logo-badge { display: inline-block; margin-top: 6px; font-size: 10px; padding: 2px 8px; border-radius: 20px; background: #EF9F2730; color: #FAC775; border: 1px solid #EF9F2750; font-weight: 600; }
+    .nav { flex: 1; padding: 10px 0; overflow-y: auto; }
+    .nav-section { padding: 10px 16px 4px; font-size: 9px; color: #ffffff35; text-transform: uppercase; letter-spacing: 0.08em; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; cursor: pointer; font-size: 13px; color: #ffffff70; transition: all 0.15s; border-left: 2px solid transparent; }
+    .nav-item:hover { background: #ffffff08; color: #ffffffcc; }
+    .nav-item.active { background: #ffffff12; color: #fff; border-left-color: #EF9F27; font-weight: 500; }
+    .nav-icon { font-size: 15px; width: 20px; text-align: center; }
+    .sidebar-user { padding: 14px 16px; border-top: 1px solid #ffffff15; display: flex; align-items: center; gap: 10px; }
+    .user-avatar { width: 32px; height: 32px; border-radius: 50%; background: #EF9F2740; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #FAC775; flex-shrink: 0; }
+    .user-name { font-size: 13px; font-weight: 500; color: #fff; }
+    .user-role { font-size: 10px; color: #FAC775; }
+    .logout-btn { margin-left: auto; cursor: pointer; opacity: 0.5; color: #fff; background: none; border: none; font-size: 16px; }
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .topbar { background: #fff; border-bottom: 1px solid #e8e8e8; padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .topbar-title { font-size: 15px; font-weight: 600; }
+    .topbar-sub { font-size: 11px; color: #aaa; margin-top: 1px; }
+    .content { flex: 1; overflow-y: auto; padding: 24px; }
+    .page { display: none; }
+    .page.active { display: block; }
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+    .stat-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 12px; padding: 16px; position: relative; overflow: hidden; }
+    .stat-accent { position: absolute; top: 0; left: 0; right: 0; height: 3px; border-radius: 12px 12px 0 0; }
+    .stat-label { font-size: 12px; color: #999; margin-bottom: 6px; }
+    .stat-value { font-size: 24px; font-weight: 700; }
+    .stat-change { font-size: 11px; margin-top: 4px; color: #888; }
+    .grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 16px; }
+    .card { background: #fff; border: 1px solid #e8e8e8; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    .card-title { font-size: 14px; font-weight: 600; margin-bottom: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead tr { border-bottom: 1px solid #e8e8e8; }
+    th { padding: 8px 0; font-weight: 500; color: #999; text-align: left; font-size: 11px; text-transform: uppercase; }
+    td { padding: 10px 0; border-bottom: 1px solid #f5f5f0; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    .badge { font-size: 10px; padding: 3px 8px; border-radius: 20px; font-weight: 500; }
+    .badge-ok { background: #EAF3DE; color: #3B6D11; }
+    .badge-warn { background: #FAEEDA; color: #633806; }
+    .badge-err { background: #FCEBEB; color: #791F1F; }
+    .badge-info { background: #E6F1FB; color: #0C447C; }
+    .loading { text-align: center; padding: 28px; color: #aaa; }
+    .spinner { width: 26px; height: 26px; border: 3px solid #e8e8e8; border-top-color: #EF9F27; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 10px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .empty { text-align: center; padding: 28px; color: #aaa; }
+    .empty-icon { font-size: 32px; margin-bottom: 8px; }
+    .note-high { color: #3B6D11; font-weight: 700; }
+    .note-mid { color: #185FA5; font-weight: 700; }
+    .note-low { color: #A32D2D; font-weight: 700; }
+    .progress-bar { height: 5px; border-radius: 4px; background: #f0f0f0; overflow: hidden; margin-top: 4px; }
+    .progress-fill { height: 100%; border-radius: 4px; }
+    .devoir-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f5f5f0; }
+    .devoir-row:last-child { border-bottom: none; }
+    .devoir-date { width: 40px; height: 40px; border-radius: 8px; background: #FAEEDA; display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0; }
+    .field { margin-bottom: 12px; }
+    .field label { font-size: 12px; color: #888; display: block; margin-bottom: 4px; }
+    .field input, .field select, .field textarea { width: 100%; padding: 9px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; font-family: inherit; outline: none; }
+    .stars { display: flex; gap: 4px; }
+    .star { font-size: 20px; cursor: pointer; opacity: 0.3; }
+    .star.active { opacity: 1; }
+    .cours-block { background: #FAEEDA; border-left: 3px solid #EF9F27; border-radius: 0 8px 8px 0; padding: 10px 14px; margin-bottom: 6px; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <div class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-title">EduManager 🇬🇳</div>
+      <div class="logo-school" id="school-name">Chargement...</div>
+      <div class="logo-badge">Espace Élève</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-section">Mon espace</div>
+      <div class="nav-item active" onclick="showPage('dashboard',this)"><span class="nav-icon">🏠</span> Accueil</div>
+      <div class="nav-item" onclick="showPage('notes',this)"><span class="nav-icon">📊</span> Mes notes</div>
+      <div class="nav-item" onclick="showPage('absences',this)"><span class="nav-icon">📌</span> Mes absences</div>
+      <div class="nav-item" onclick="showPage('devoirs',this)"><span class="nav-icon">📝</span> Devoirs à rendre</div>
+      <div class="nav-item" onclick="showPage('bulletins',this)"><span class="nav-icon">📄</span> Mes bulletins</div>
+      <div class="nav-section">École</div>
+      <div class="nav-item" onclick="showPage('annonces',this)"><span class="nav-icon">📢</span> Annonces</div>
+      <div class="nav-item" onclick="showPage('avis',this)"><span class="nav-icon">⭐</span> Avis sur mes profs</div>
+      <div class="nav-item" onclick="showPage('signalement',this)"><span class="nav-icon">🚨</span> Signalement anonyme</div>
+    </nav>
+    <div class="sidebar-user">
+      <div class="user-avatar" id="user-initials">--</div>
+      <div>
+        <div class="user-name" id="user-name">Chargement...</div>
+        <div class="user-role" id="user-classe">Élève</div>
+      </div>
+      <button class="logout-btn" onclick="logout()">⏻</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <div class="topbar-title" id="page-title">Accueil</div>
+        <div class="topbar-sub" id="page-sub">Chargement...</div>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- DASHBOARD -->
+      <div class="page active" id="page-dashboard">
+        <div id="load-dash" class="loading"><div class="spinner"></div>Chargement...</div>
+        <div id="cont-dash" style="display:none">
+          <div class="stats-grid">
+            <div class="stat-card"><div class="stat-accent" style="background:#EF9F27"></div><div class="stat-label">Moyenne générale</div><div class="stat-value" id="d-moy">—</div><div class="stat-change">Ce trimestre</div></div>
+            <div class="stat-card"><div class="stat-accent" style="background:#185FA5"></div><div class="stat-label">Nombre de notes</div><div class="stat-value" id="d-notes">0</div><div class="stat-change">Saisies</div></div>
+            <div class="stat-card"><div class="stat-accent" style="background:#E24B4A"></div><div class="stat-label">Absences</div><div class="stat-value" id="d-abs">0</div><div class="stat-change">Ce trimestre</div></div>
+            <div class="stat-card"><div class="stat-accent" style="background:#1D9E75"></div><div class="stat-label">Devoirs à rendre</div><div class="stat-value" id="d-devoirs">0</div><div class="stat-change">Cette semaine</div></div>
+          </div>
+          <div class="grid2">
+            <div class="card">
+              <div class="card-title">Mes dernières notes</div>
+              <div id="dernieres-notes"><div class="loading">Chargement...</div></div>
+            </div>
+            <div class="card">
+              <div class="card-title">Progression par matière</div>
+              <div id="progression"><div class="loading">Chargement...</div></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Devoirs à venir</div>
+            <div id="devoirs-dash"><div class="loading">Chargement...</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- NOTES -->
+      <div class="page" id="page-notes">
+        <div id="load-notes" class="loading"><div class="spinner"></div>Chargement...</div>
+        <div class="card" id="cont-notes" style="display:none">
+          <table>
+            <thead><tr><th>Matière</th><th>Note</th><th>Coef.</th><th>Période</th><th>Appréciation</th></tr></thead>
+            <tbody id="tbody-notes"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ABSENCES -->
+      <div class="page" id="page-absences">
+        <div id="load-absences" class="loading"><div class="spinner"></div>Chargement...</div>
+        <div class="card" id="cont-absences" style="display:none">
+          <table>
+            <thead><tr><th>Date</th><th>Période</th><th>Statut</th></tr></thead>
+            <tbody id="tbody-absences"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- DEVOIRS -->
+      <div class="page" id="page-devoirs">
+        <div id="load-devoirs" class="loading"><div class="spinner"></div>Chargement...</div>
+        <div id="cont-devoirs"></div>
+      </div>
+
+      <!-- BULLETINS -->
+      <div class="page" id="page-bulletins">
+        <div class="card">
+          <div class="card-title">Mes bulletins scolaires</div>
+          <div id="cont-bulletins"><div class="loading">Chargement...</div></div>
+        </div>
+      </div>
+
+      <!-- ANNONCES -->
+      <div class="page" id="page-annonces">
+        <div id="load-annonces" class="loading"><div class="spinner"></div>Chargement...</div>
+        <div id="cont-annonces"></div>
+      </div>
+
+      <!-- AVIS PROFS -->
+      <div class="page" id="page-avis">
+        <div class="card">
+          <div class="card-title">Évaluer mes professeurs</div>
+          <div id="load-avis" class="loading"><div class="spinner"></div>Chargement...</div>
+          <div id="cont-avis"></div>
+        </div>
+      </div>
+
+      <!-- SIGNALEMENT ANONYME -->
+      <div class="page" id="page-signalement">
+        <div style="background:#FCEBEB;border:1px solid #F09595;border-radius:10px;padding:16px;margin-bottom:16px">
+          <div style="font-size:14px;font-weight:600;color:#791F1F;margin-bottom:8px">🚨 Signalement anonyme — Harcèlement</div>
+          <div style="font-size:12px;color:#A32D2D;margin-bottom:14px">Ce signalement est <strong>strictement confidentiel</strong>. Seul le super administrateur peut le voir.</div>
+          <div class="field"><label style="color:#791F1F">Décrivez la situation *</label>
+            <textarea id="sig-contenu" style="width:100%;padding:9px 12px;border:1px solid #F09595;border-radius:8px;font-size:13px;height:120px;resize:vertical;font-family:inherit" placeholder="Décrivez ce qui se passe..."></textarea>
+          </div>
+          <button style="width:100%;padding:10px;background:#E24B4A;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit" onclick="envoyerSignalement()">Envoyer de manière anonyme</button>
+        </div>
+        <div style="background:#EAF3DE;border-radius:10px;padding:14px;font-size:12px;color:#3B6D11">
+          ✅ Votre identité est protégée. Ce signalement sera traité sous 48h.
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://rcojerlzguwqpclyudjo.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjb2plcmx6Z3V3cXBjbHl1ZGpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NTg1MzIsImV4cCI6MjA5MTAzNDUzMn0.4R_NOrYLdhkVMKw87Z33FLS9LoAUAgVj_Uk_RBCf8tg';
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentUser = null;
+let ecoleId = null;
+let eleveId = null;
+let avisRatings = {};
+
+(async () => {
+  const demo = JSON.parse(localStorage.getItem('edu_user') || '{}');
+  if (demo.role === 'eleve') {
+    currentUser = { ...demo, demo: true };
+    const { data: ecoles } = await db.from('ecoles').select('*').limit(1);
+    if (ecoles?.length) { ecoleId = ecoles[0].id; document.getElementById('school-name').textContent = ecoles[0].nom; }
+  } else {
+    try {
+      const { data: { session } } = await db.auth.getSession();
+      if (!session) { window.location.href = 'index.html'; return; }
+      const { data: u } = await db.from('utilisateurs').select('*, ecoles(*)').eq('id', session.user.id).maybeSingle();
+      if (!u || u.role !== 'eleve') { window.location.href = 'index.html'; return; }
+      currentUser = u; ecoleId = u.ecole_id;
+      document.getElementById('school-name').textContent = u.ecoles?.nom || '';
+      // Trouver le profil élève
+      const { data: elv } = await db.from('eleves').select('*').eq('utilisateur_id', u.id).maybeSingle();
+      if (elv) { eleveId = elv.id; document.getElementById('user-classe').textContent = `Élève · ${elv.classe_id||'—'}`; }
+    } catch(e) { window.location.href = 'index.html'; return; }
+  }
+  const nom = currentUser.nom || 'Élève';
+  const prenom = currentUser.prenom || '';
+  document.getElementById('user-name').textContent = `${prenom} ${nom}`.trim();
+  document.getElementById('user-initials').textContent = `${prenom[0]||''}${nom[0]||''}`.toUpperCase();
+  document.getElementById('page-sub').textContent = `${new Date().toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' })}`;
+  await chargerDashboard();
+})();
+
+const pageMeta = {
+  dashboard:   ['Accueil', 'Mon tableau de bord'],
+  notes:       ['Mes notes', 'Résultats scolaires'],
+  absences:    ['Mes absences', 'Suivi des présences'],
+  devoirs:     ['Devoirs à rendre', 'Cahier de texte'],
+  bulletins:   ['Mes bulletins', 'Documents officiels'],
+  annonces:    ['Annonces', 'Informations de l\'école'],
+  avis:        ['Avis sur mes profs', 'Évaluation anonyme'],
+  signalement: ['Signalement anonyme', 'Strictement confidentiel'],
+};
+
+function showPage(id, navEl) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  if (navEl) navEl.classList.add('active');
+  const m = pageMeta[id] || [id, ''];
+  document.getElementById('page-title').textContent = m[0];
+  document.getElementById('page-sub').textContent = m[1];
+  if (id === 'notes') chargerNotes();
+  if (id === 'absences') chargerAbsences();
+  if (id === 'devoirs') chargerDevoirs();
+  if (id === 'bulletins') chargerBulletins();
+  if (id === 'annonces') chargerAnnonces();
+  if (id === 'avis') chargerAvis();
+}
+
+async function chargerDashboard() {
+  try {
+    if (ecoleId && eleveId) {
+      const [notes, absences, devoirs] = await Promise.all([
+        db.from('notes').select('*, matieres(nom,coefficient)').eq('eleve_id', eleveId),
+        db.from('absences').select('id',{count:'exact'}).eq('eleve_id', eleveId),
+        db.from('annonces').select('id',{count:'exact'}).eq('ecole_id',ecoleId).like('titre','[DEVOIR]%'),
+      ]);
+      const N = notes.data || [];
+      const moy = N.length ? (N.reduce((s,n)=>s+Number(n.valeur),0)/N.length).toFixed(1) : '—';
+      document.getElementById('d-moy').textContent = moy !== '—' ? moy+'/20' : '—';
+      document.getElementById('d-notes').textContent = N.length;
+      document.getElementById('d-abs').textContent = absences.count || 0;
+      document.getElementById('d-devoirs').textContent = devoirs.count || 0;
+
+      // Dernières notes
+      document.getElementById('dernieres-notes').innerHTML = N.length === 0
+        ? '<div class="empty">Aucune note pour l\'instant.</div>'
+        : N.slice(0,5).map(n => `
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f5f5f0">
+            <span style="font-size:13px">${n.matieres?.nom||'—'}</span>
+            <span class="${Number(n.valeur)>=14?'note-high':Number(n.valeur)>=10?'note-mid':'note-low'}">${n.valeur}/20</span>
+          </div>`).join('');
+
+      // Progression
+      const parMat = {};
+      N.forEach(n => { if (!parMat[n.matieres?.nom||'—']) parMat[n.matieres?.nom||'—'] = []; parMat[n.matieres?.nom||'—'].push(Number(n.valeur)); });
+      document.getElementById('progression').innerHTML = Object.keys(parMat).length === 0
+        ? '<div class="empty">Aucune note.</div>'
+        : Object.entries(parMat).map(([mat,vals]) => {
+            const m = (vals.reduce((s,v)=>s+v,0)/vals.length).toFixed(1);
+            return `<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>${mat}</span><span style="font-weight:600;color:${m>=10?'#3B6D11':'#A32D2D'}">${m}/20</span></div><div class="progress-bar"><div class="progress-fill" style="width:${m*5}%;background:${m>=14?'#1D9E75':m>=10?'#185FA5':'#E24B4A'}"></div></div></div>`;
+          }).join('');
+    } else {
+      document.getElementById('d-moy').textContent = '—';
+      document.getElementById('d-notes').textContent = '0';
+      document.getElementById('d-abs').textContent = '0';
+      document.getElementById('d-devoirs').textContent = '0';
+      document.getElementById('dernieres-notes').innerHTML = '<div class="empty">Connectez-vous avec un vrai compte.</div>';
+      document.getElementById('progression').innerHTML = '<div class="empty">Aucune donnée.</div>';
+    }
+
+    // Devoirs
+    if (ecoleId) {
+      const { data: devs } = await db.from('annonces').select('*').eq('ecole_id',ecoleId).like('titre','[DEVOIR]%').order('created_at',{ascending:false}).limit(3);
+      document.getElementById('devoirs-dash').innerHTML = (devs||[]).length === 0
+        ? '<div class="empty">Aucun devoir publié.</div>'
+        : (devs||[]).map(d => `
+          <div class="devoir-row">
+            <div class="devoir-date"><div style="font-size:15px;font-weight:700;color:#633806">${new Date(d.created_at).getDate()}</div><div style="font-size:9px;color:#854F0B;text-transform:uppercase">${new Date(d.created_at).toLocaleDateString('fr-FR',{month:'short'})}</div></div>
+            <div style="flex:1"><div style="font-size:13px;font-weight:500">${d.titre.replace('[DEVOIR] ','')}</div><div style="font-size:12px;color:#888;margin-top:2px">${d.contenu}</div></div>
+          </div>`).join('');
+    } else {
+      document.getElementById('devoirs-dash').innerHTML = '<div class="empty">Aucun devoir.</div>';
+    }
+
+    document.getElementById('load-dash').style.display = 'none';
+    document.getElementById('cont-dash').style.display = 'block';
+  } catch(e) {
+    document.getElementById('load-dash').innerHTML = `<div style="color:#A32D2D;text-align:center;padding:20px">Erreur : ${e.message}</div>`;
+  }
+}
+
+async function chargerNotes() {
+  document.getElementById('load-notes').style.display = 'block';
+  document.getElementById('cont-notes').style.display = 'none';
+  if (!eleveId) { document.getElementById('load-notes').innerHTML = '<div class="empty">Connectez-vous avec un vrai compte élève.</div>'; return; }
+  const { data } = await db.from('notes').select('*, matieres(nom,coefficient)').eq('eleve_id', eleveId).order('created_at',{ascending:false});
+  document.getElementById('load-notes').style.display = 'none';
+  document.getElementById('cont-notes').style.display = 'block';
+  document.getElementById('tbody-notes').innerHTML = (data||[]).length === 0
+    ? '<tr><td colspan="5" style="text-align:center;color:#aaa;padding:20px">Aucune note pour l\'instant</td></tr>'
+    : (data||[]).map(n => `<tr>
+        <td style="font-weight:500">${n.matieres?.nom||'—'}</td>
+        <td class="${Number(n.valeur)>=14?'note-high':Number(n.valeur)>=10?'note-mid':'note-low'}">${n.valeur}/20</td>
+        <td style="color:#888">${n.matieres?.coefficient||1}</td>
+        <td style="color:#888;font-size:12px">${n.periode||'—'}</td>
+        <td style="font-size:12px;color:#888">${n.appreciation||'—'}</td>
+      </tr>`).join('');
+}
+
+async function chargerAbsences() {
+  document.getElementById('load-absences').style.display = 'block';
+  document.getElementById('cont-absences').style.display = 'none';
+  if (!eleveId) { document.getElementById('load-absences').innerHTML = '<div class="empty">Connectez-vous avec un vrai compte.</div>'; return; }
+  const { data } = await db.from('absences').select('*').eq('eleve_id', eleveId).order('date_absence',{ascending:false});
+  document.getElementById('load-absences').style.display = 'none';
+  document.getElementById('cont-absences').style.display = 'block';
+  document.getElementById('tbody-absences').innerHTML = (data||[]).length === 0
+    ? '<tr><td colspan="3" style="text-align:center;color:#aaa;padding:20px">✅ Aucune absence enregistrée</td></tr>'
+    : (data||[]).map(a => `<tr>
+        <td style="color:#888;font-size:12px">${new Date(a.date_absence).toLocaleDateString('fr-FR')}</td>
+        <td>${a.periode}</td>
+        <td><span class="badge ${a.justifiee?'badge-ok':'badge-warn'}">${a.justifiee?'Justifiée':'Non justifiée'}</span></td>
+      </tr>`).join('');
+}
+
+async function chargerDevoirs() {
+  document.getElementById('load-devoirs').style.display = 'block';
+  document.getElementById('cont-devoirs').innerHTML = '';
+  if (!ecoleId) { document.getElementById('load-devoirs').innerHTML = '<div class="empty">Aucun devoir.</div>'; return; }
+  const { data } = await db.from('annonces').select('*').eq('ecole_id',ecoleId).like('titre','[DEVOIR]%').order('created_at',{ascending:false});
+  document.getElementById('load-devoirs').style.display = 'none';
+  document.getElementById('cont-devoirs').innerHTML = (data||[]).length === 0
+    ? '<div class="empty"><div class="empty-icon">📝</div>Aucun devoir publié.</div>'
+    : (data||[]).map(d => `
+      <div class="card" style="margin-bottom:10px">
+        <div style="font-size:14px;font-weight:600;color:#633806;margin-bottom:6px">${d.titre.replace('[DEVOIR] ','')}</div>
+        <div style="font-size:13px;color:#555">${d.contenu}</div>
+        <div style="font-size:11px;color:#aaa;margin-top:6px">Publié le ${new Date(d.created_at).toLocaleDateString('fr-FR')}</div>
+      </div>`).join('');
+}
+
+async function chargerBulletins() {
+  document.getElementById('cont-bulletins').innerHTML = eleveId
+    ? `<div style="display:flex;align-items:center;justify-content:space-between;padding:14px;background:#f9f9f9;border-radius:8px;margin-bottom:8px">
+        <div><div style="font-size:13px;font-weight:500">Bulletin — Trimestre 2 · 2025-2026</div><div style="font-size:11px;color:#aaa;margin-top:2px">Disponible</div></div>
+        <button style="padding:6px 14px;background:#EF9F27;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer" onclick="alert('📄 Bulletin disponible après génération par l\\'école')">Télécharger</button>
+      </div>`
+    : '<div class="empty"><div class="empty-icon">📄</div>Connectez-vous avec un vrai compte.</div>';
+}
+
+async function chargerAnnonces() {
+  document.getElementById('load-annonces').style.display = 'block';
+  if (!ecoleId) { document.getElementById('load-annonces').innerHTML = '<div class="empty">Aucune annonce.</div>'; return; }
+  const { data } = await db.from('annonces').select('*').eq('ecole_id',ecoleId).not('titre','like','[DEVOIR]%').order('created_at',{ascending:false});
+  document.getElementById('load-annonces').style.display = 'none';
+  document.getElementById('cont-annonces').innerHTML = (data||[]).length === 0
+    ? '<div class="empty"><div class="empty-icon">📢</div>Aucune annonce.</div>'
+    : (data||[]).map(a => `
+      <div class="card" style="margin-bottom:10px">
+        <div style="font-size:14px;font-weight:600;margin-bottom:6px">${a.titre}</div>
+        <div style="font-size:13px;color:#555">${a.contenu}</div>
+        <div style="font-size:11px;color:#aaa;margin-top:6px">${new Date(a.created_at).toLocaleDateString('fr-FR')}</div>
+      </div>`).join('');
+}
+
+async function chargerAvis() {
+  document.getElementById('load-avis').style.display = 'block';
+  document.getElementById('cont-avis').innerHTML = '';
+  if (!ecoleId) { document.getElementById('load-avis').innerHTML = '<div class="empty">Connectez-vous.</div>'; return; }
+  const { data: profs } = await db.from('utilisateurs').select('id,nom,prenom').eq('ecole_id',ecoleId).eq('role','professeur');
+  document.getElementById('load-avis').style.display = 'none';
+  if ((profs||[]).length === 0) { document.getElementById('cont-avis').innerHTML = '<div class="empty">Aucun professeur enregistré.</div>'; return; }
+  document.getElementById('cont-avis').innerHTML = (profs||[]).map(p => {
+    avisRatings[p.id] = 3;
+    return `<div style="padding:14px 0;border-bottom:1px solid #f5f5f0">
+      <div style="font-size:13px;font-weight:500;margin-bottom:8px">${p.prenom} ${p.nom}</div>
+      <div class="stars" id="stars-${p.id}">
+        ${[1,2,3,4,5].map(i=>`<span class="star ${i<=3?'active':''}" onclick="setAvis('${p.id}',${i})">★</span>`).join('')}
+      </div>
+      <input type="text" id="avis-comm-${p.id}" placeholder="Commentaire (anonyme)..." style="margin-top:8px;width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:inherit"/>
+    </div>`;
+  }).join('') + `<button class="btn btn-primary" style="width:100%;margin-top:14px" onclick="envoyerAvis()">Envoyer mes avis</button>`;
+}
+
+function setAvis(profId, note) {
+  avisRatings[profId] = note;
+  document.querySelectorAll(`#stars-${profId} .star`).forEach((s,i) => s.classList.toggle('active', i < note));
+}
+
+async function envoyerAvis() {
+  if (!eleveId) return alert('Connectez-vous avec un vrai compte élève.');
+  const insertions = Object.entries(avisRatings).map(([profId, note]) => ({
+    ecole_id: ecoleId, eleve_id: eleveId, professeur_id: profId,
+    note, commentaire: document.getElementById(`avis-comm-${profId}`)?.value || null
+  }));
+  await db.from('avis_profs').upsert(insertions, { onConflict: 'eleve_id,professeur_id' });
+  alert('✅ Vos avis ont été envoyés anonymement !');
+}
+
+async function envoyerSignalement() {
+  const contenu = document.getElementById('sig-contenu').value.trim();
+  if (!contenu) return alert('Décrivez la situation.');
+  if (!ecoleId) return alert('École non trouvée.');
+  await db.from('signalements').insert([{ ecole_id: ecoleId, contenu, statut: 'nouveau' }]);
+  alert('✅ Signalement envoyé anonymement. Traité sous 48h.');
+  document.getElementById('sig-contenu').value = '';
+}
+
+async function logout() {
+  localStorage.removeItem('edu_user');
+  await db.auth.signOut();
+  window.location.href = 'index.html';
+}
+</script>
+</body>
+</html>
