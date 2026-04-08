@@ -393,6 +393,39 @@
 </div>
 
 <script>
+  // ============================================
+// GÉNÉRATION MATRICULES
+// ============================================
+function genererMatriculeEleve(code, annee, seq) {
+  const c = (code||'ECO').split('-')[0].substring(0,3).toUpperCase();
+  const a = String(annee||new Date().getFullYear()).slice(-2);
+  return `ELV-${c}-${a}-${String(seq).padStart(4,'0')}`;
+}
+function genererMatriculeProfesseur(code, annee, seq) {
+  const c = (code||'ECO').split('-')[0].substring(0,3).toUpperCase();
+  const a = String(annee||new Date().getFullYear()).slice(-2);
+  return `PRF-${c}-${a}-${String(seq).padStart(3,'0')}`;
+}
+function genererMatriculeParent(code, annee, seq) {
+  const c = (code||'ECO').split('-')[0].substring(0,3).toUpperCase();
+  const a = String(annee||new Date().getFullYear()).slice(-2);
+  return `PAR-${c}-${a}-${String(seq).padStart(3,'0')}`;
+}
+async function getProchainMatriculeEleve() {
+  if (!ecoleId) return genererMatriculeEleve('ECO', new Date().getFullYear(), 1);
+  const { count } = await db.from('eleves').select('id',{count:'exact'}).eq('ecole_id', ecoleId);
+  return genererMatriculeEleve(codeEcole, new Date().getFullYear(), (count||0)+1);
+}
+async function getProchainMatriculeProf() {
+  if (!ecoleId) return genererMatriculeProfesseur('ECO', new Date().getFullYear(), 1);
+  const { count } = await db.from('utilisateurs').select('id',{count:'exact'}).eq('ecole_id', ecoleId).eq('role','professeur');
+  return genererMatriculeProfesseur(codeEcole, new Date().getFullYear(), (count||0)+1);
+}
+async function getProchainMatriculeParent() {
+  if (!ecoleId) return genererMatriculeParent('ECO', new Date().getFullYear(), 1);
+  const { count } = await db.from('utilisateurs').select('id',{count:'exact'}).eq('ecole_id', ecoleId).eq('role','parent');
+  return genererMatriculeParent(codeEcole, new Date().getFullYear(), (count||0)+1);
+}
 // ============================================
 // INIT SUPABASE
 // ============================================
@@ -402,6 +435,7 @@ const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let currentUser = null;
+let codeEcole = '';
 let ecoleId = null;
 let tousEleves = [];
 let toutesClasses = [];
@@ -1094,6 +1128,10 @@ function ouvrirModal(type) {
 
 async function genererModalEleve() {
   const matricule = await getProchainMatriculeEleve();
+  if (toutesClasses.length === 0 && ecoleId) {
+    const { data } = await db.from('classes').select('id,nom').eq('ecole_id', ecoleId).order('nom');
+    toutesClasses = data || [];
+  }
   document.getElementById('modal-content').innerHTML = `
     <div class="modal-title">👥 Ajouter un élève</div>
     <div class="alert alert-err" id="m-err"></div>
@@ -1208,19 +1246,21 @@ function genererModalEvenement() {
 }
 function fermerModal() { document.getElementById('modal-bg').classList.remove('open'); }
 
-async function sauvegarderEleve() {
+ {
+  async function sauvegarderEleve() {
   const prenom = document.getElementById('m-prenom').value.trim();
   const nom = document.getElementById('m-nom').value.trim();
   const classeId = document.getElementById('m-classe').value;
   const ddn = document.getElementById('m-ddn').value;
   const sexe = document.getElementById('m-sexe').value;
-  const matricule = document.getElementById('m-matricule').value.trim();
+  const matricule = document.getElementById('m-matricule-eleve').value;
   if (!prenom || !nom) { showModalErr('Prénom et nom obligatoires.'); return; }
   const { error } = await db.from('eleves').insert([{ ecole_id: ecoleId, prenom, nom, classe_id: classeId || null, date_naissance: ddn || null, sexe, numero_matricule: matricule || null, statut: 'actif' }]);
   if (error) { showModalErr(error.message); return; }
   fermerModal();
-  alert(`✅ ${prenom} ${nom} ajouté(e) !`);
+  alert(`✅ ${prenom} ${nom} ajouté(e) !\n📋 Matricule : ${matricule}`);
   await chargerEleves();
+}
 }
 
 async function sauvegarderClasse() {
