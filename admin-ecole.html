@@ -766,15 +766,6 @@ async function chargerProfesseurs() {
   afficherProfs(tousProfs);
   document.getElementById('load-profs').style.display = 'none';
   document.getElementById('table-profs').style.display = 'table';
-} {
-  document.getElementById('load-profs').style.display = 'block';
-  document.getElementById('table-profs').style.display = 'none';
-  if (!ecoleId) return;
-  var res = await db.from('utilisateurs').select('*').eq('ecole_id', ecoleId).eq('role', 'professeur').order('nom');
-  tousProfs = res.data || [];
-  afficherProfs(tousProfs);
-  document.getElementById('load-profs').style.display = 'none';
-  document.getElementById('table-profs').style.display = 'table';
 }
 
 function afficherProfs(profs) {
@@ -785,8 +776,8 @@ function afficherProfs(profs) {
     profs.forEach(function(p) {
       var ini = ((p.prenom || ' ')[0] + p.nom[0]).toUpperCase();
       var coursProf = tousCoursAssignes.filter(function(c) { return c.professeur_id === p.id; });
-var coursHtml = coursProf.length === 0 ? '<span style="color:#aaa;font-size:11px">Non assigné</span>' : coursProf.map(function(c) { return '<span style="display:inline-block;background:#E6F1FB;color:#0C447C;border-radius:4px;padding:2px 6px;font-size:10px;margin:1px">' + (c.matieres ? c.matieres.nom : '—') + ' · ' + (c.classes ? c.classes.nom : '—') + '</span>'; }).join('');
-html += '<tr><td><span class="mat-badge">' + (p.numero_matricule || '—') + '</span></td><td><div style="display:flex;align-items:center;gap:8px"><div class="ava" style="background:#E1F5EE;color:#085041">' + ini + '</div><div><div style="font-weight:500">' + (p.prenom || '') + ' ' + p.nom + '</div><div style="margin-top:2px">' + coursHtml + '</div></div></div></td><td style="font-size:12px;color:#888">' + (p.telephone || '—') + '</td><td style="font-size:12px;color:#888">' + p.email + '</td><td><span class="badge ' + (p.actif ? 'badge-ok' : 'badge-err') + '">' + (p.actif ? 'Actif' : 'Inactif') + '</span></td><td><div style="display:flex;gap:4px"><button class="btn-sm" style="background:#E6F1FB;color:#0C447C;border-color:#ADD3F5" onclick="assignerCours(\'' + p.id + '\',\'' + p.prenom + ' ' + p.nom + '\')">Assigner</button><button class="btn-sm btn-danger" onclick="supprimerProf(\'' + p.id + '\',\'' + p.nom + '\')">Supprimer</button></div></td></tr>';
+var coursHtml = coursProf.length === 0 ? '<span style="color:#aaa;font-size:11px">Non assigne</span>' : coursProf.map(function(c) { return '<span style="display:inline-block;background:#E6F1FB;color:#0C447C;border-radius:4px;padding:2px 6px;font-size:10px;margin:1px">' + (c.matieres ? c.matieres.nom : '') + ' - ' + (c.classes ? c.classes.nom : '') + '</span>'; }).join('');
+html += '<tr><td><span class="mat-badge">' + (p.numero_matricule || '—') + '</span></td><td><div style="display:flex;align-items:center;gap:8px"><div class="ava" style="background:#E1F5EE;color:#085041">' + ini + '</div><div><div style="font-weight:500">' + (p.prenom || '') + ' ' + p.nom + '</div><div style="margin-top:3px">' + coursHtml + '</div></div></div></td><td style="font-size:12px;color:#888">' + (p.telephone || '—') + '</td><td style="font-size:12px;color:#888">' + p.email + '</td><td><span class="badge ' + (p.actif ? 'badge-ok' : 'badge-err') + '">' + (p.actif ? 'Actif' : 'Inactif') + '</span></td><td><div style="display:flex;gap:4px"><button class="btn-sm" style="background:#E6F1FB;color:#0C447C;border-color:#ADD3F5" onclick="assignerCours(\'' + p.id + '\',\'' + p.prenom + ' ' + p.nom + '\')">Assigner</button><button class="btn-sm btn-danger" onclick="supprimerProf(\'' + p.id + '\',\'' + p.nom + '\')">Supprimer</button></div></td></tr>';
     });
   }
   document.getElementById('tbody-profs').innerHTML = html;
@@ -818,6 +809,8 @@ async function sauvegarderCours(profId, profNom) {
   var res = await db.from('cours_assignes').insert([{ ecole_id: ecoleId, professeur_id: profId, matiere_id: matiereId, classe_id: classeId }]);
   if (res.error) { alert('Erreur : ' + res.error.message); return; }
   alert('Cours assigne !');
+  var resCours = await db.from('cours_assignes').select('*, matieres(nom), classes(nom)').eq('ecole_id', ecoleId);
+  tousCoursAssignes = resCours.data || [];
   await assignerCours(profId, profNom);
 }
 
