@@ -1265,14 +1265,20 @@ function showModalErr(msg) {
 async function ouvrirModal(type) {
   var html = '';
   if (type === 'eleve') {
-    var mat = await prochainEleve();
     if (toutesClasses.length === 0 && ecoleId) {
       var rc = await db.from('classes').select('id,nom').eq('ecole_id', ecoleId).order('nom');
       toutesClasses = rc.data || [];
     }
     var opts = '<option value="">Selectionner...</option>';
     toutesClasses.forEach(function(c) { opts += '<option value="' + c.id + '">' + c.nom + '</option>'; });
-    html = '<div class="modal-title">Ajouter un eleve</div><div class="alert alert-err" id="m-err"></div><div style="background:#EAF3DE;border-radius:8px;padding:10px 12px;margin-bottom:14px;display:flex;align-items:center;gap:8px"><span style="font-size:12px;color:#3B6D11">Matricule genere automatiquement:</span><span class="mat-badge mat-badge-green">' + mat + '</span></div><div class="field-grid"><div class="field"><label>Prenom *</label><input id="m-prenom" type="text" placeholder="Mamadou"/></div><div class="field"><label>Nom *</label><input id="m-nom" type="text" placeholder="Diallo"/></div></div><div class="field-grid"><div class="field"><label>Date de naissance</label><input id="m-ddn" type="date"/></div><div class="field"><label>Sexe</label><select id="m-sexe"><option value="M">Masculin</option><option value="F">Feminin</option></select></div></div><div class="field"><label>Classe</label><select id="m-classe">' + opts + '</select></div><div class="field"><label>Tel parent</label><input id="m-tel-parent" type="tel" placeholder="+224 620 000 000"/></div><input type="hidden" id="m-mat" value="' + mat + '"/><div class="modal-actions"><button class="btn" onclick="fermerModal()">Annuler</button><button class="btn btn-primary" onclick="sauvegarderEleve()">Ajouter</button></div>';
+    html = '<div class="modal-title">Ajouter un eleve</div><div class="alert alert-err" id="m-err"></div>' +
+      '<div style="background:#E6F1FB;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#0C447C"><strong>Info :</strong> Entrez le matricule national de l\'eleve. Il utilisera ce matricule pour creer son compte.</div>' +
+      '<div class="field"><label>Matricule national *</label><input id="m-mat" type="text" placeholder="Ex: GN-2024-00123456" style="text-transform:uppercase"/><div style="font-size:11px;color:#aaa;margin-top:3px">Matricule officiel guineen de l\'eleve</div></div>' +
+      '<div class="field-grid"><div class="field"><label>Prenom *</label><input id="m-prenom" type="text" placeholder="Mamadou"/></div><div class="field"><label>Nom *</label><input id="m-nom" type="text" placeholder="Diallo"/></div></div>' +
+      '<div class="field-grid"><div class="field"><label>Date de naissance</label><input id="m-ddn" type="date"/></div><div class="field"><label>Sexe</label><select id="m-sexe"><option value="M">Masculin</option><option value="F">Feminin</option></select></div></div>' +
+      '<div class="field"><label>Classe</label><select id="m-classe">' + opts + '</select></div>' +
+      '<div class="field"><label>Tel parent</label><input id="m-tel-parent" type="tel" placeholder="+224 620 000 000"/></div>' +
+      '<div class="modal-actions"><button class="btn" onclick="fermerModal()">Annuler</button><button class="btn btn-primary" onclick="sauvegarderEleve()">Ajouter</button></div>';
   } else if (type === 'parent') {
     var mat = await prochainParent();
     html = '<div class="modal-title">Ajouter un parent</div><div class="alert alert-err" id="m-err"></div><div style="background:#EAF3DE;border-radius:8px;padding:10px 12px;margin-bottom:14px;display:flex;align-items:center;gap:8px"><span style="font-size:12px;color:#3B6D11">Matricule genere automatiquement:</span><span class="mat-badge mat-badge-green">' + mat + '</span></div><div class="field-grid"><div class="field"><label>Prenom *</label><input id="m-prenom" type="text" placeholder="Fatoumata"/></div><div class="field"><label>Nom *</label><input id="m-nom" type="text" placeholder="Bah"/></div></div><div class="field"><label>Telephone (+224) *</label><input id="m-tel" type="tel" placeholder="620 000 000"/></div><div class="field"><label>Email *</label><input id="m-email" type="email" placeholder="parent@email.com"/></div><input type="hidden" id="m-mat" value="' + mat + '"/><div class="modal-actions"><button class="btn" onclick="fermerModal()">Annuler</button><button class="btn btn-primary" onclick="sauvegarderParent()">Ajouter</button></div>';
@@ -1300,12 +1306,25 @@ async function sauvegarderEleve() {
   var classeId = document.getElementById('m-classe').value;
   var ddn = document.getElementById('m-ddn').value;
   var sexe = document.getElementById('m-sexe').value;
-  var mat = document.getElementById('m-mat').value;
-  if (!prenom || !nom) { showModalErr('Prenom et nom obligatoires.'); return; }
-  var res = await db.from('eleves').insert([{ ecole_id: ecoleId, prenom: prenom, nom: nom, classe_id: classeId || null, date_naissance: ddn || null, sexe: sexe, numero_matricule: mat, statut: 'actif' }]);
+  var mat = document.getElementById('m-mat').value.trim().toUpperCase();
+  if (!prenom || !nom || !mat) { showModalErr('Prenom, nom et matricule obligatoires.'); return; }
+  // Vérifier que le matricule n'existe pas déjà
+  var exist = await db.from('eleves').select('id').eq('numero_matricule', mat).eq('ecole_id', ecoleId).maybeSingle();
+  if (exist.data) { showModalErr('Ce matricule existe deja dans votre ecole.'); return; }
+  var res = await db.from('eleves').insert([{
+    ecole_id: ecoleId,
+    prenom: prenom,
+    nom: nom,
+    classe_id: classeId || null,
+    date_naissance: ddn || null,
+    sexe: sexe,
+    numero_matricule: mat,
+    statut: 'actif',
+    compte_active: false
+  }]);
   if (res.error) { showModalErr(res.error.message); return; }
   fermerModal();
-  alert('Eleve ' + prenom + ' ' + nom + ' ajoute !\nMatricule: ' + mat);
+  alert('Eleve ' + prenom + ' ' + nom + ' ajoute !\nMatricule: ' + mat + '\n\nDonnez ces informations a l\'eleve :\n- Matricule : ' + mat + '\n- Code ecole : ' + (codeEcole||''));
   chargerEleves();
 }
 

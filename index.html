@@ -304,7 +304,7 @@ async function doRegister() {
     if (!ecole.abonnement_actif) return showErr('err-reg','Cet établissement n\'a pas d\'abonnement actif.');
 
     // Vérifier matricule pour prof et élève
-    if (role === 'professeur' || role === 'eleve') {
+    if (role === 'professeur') {
       const { data: profilExist } = await db.from('utilisateurs')
         .select('id, compte_active, email')
         .eq('numero_matricule', matricule)
@@ -313,6 +313,15 @@ async function doRegister() {
       if (!profilExist) return showErr('err-reg', 'Matricule invalide. Vérifiez avec votre directeur.');
       if (profilExist.compte_active) return showErr('err-reg', 'Ce matricule a déjà un compte actif.');
     }
+    if (role === 'eleve') {
+      const { data: eleveExist } = await db.from('eleves')
+        .select('id, compte_active')
+        .eq('numero_matricule', matricule)
+        .eq('ecole_id', ecole.id)
+        .maybeSingle();
+      if (!eleveExist) return showErr('err-reg', 'Matricule invalide. Vérifiez avec votre directeur.');
+      if (eleveExist.compte_active) return showErr('err-reg', 'Ce matricule a déjà un compte actif.');
+    }
 
     // Créer le compte Auth
     const { data: auth, error: aErr } = await db.auth.signUp({ email, password: mdp });
@@ -320,7 +329,7 @@ async function doRegister() {
 
     // Créer ou lier le profil
     if (auth.user) {
-      if (role === 'professeur' || role === 'eleve') {
+      if (role === 'professeur') {
         // Lier le compte Auth au profil existant créé par le directeur
         await db.from('utilisateurs').update({
           auth_id: auth.user.id,
@@ -329,6 +338,23 @@ async function doRegister() {
           actif: true,
           telephone: tel ? '+224' + tel : null
         }).eq('numero_matricule', matricule).eq('ecole_id', ecole.id);
+      } else if (role === 'eleve') {
+        // Lier le compte Auth au profil élève existant
+        await db.from('eleves').update({
+          compte_active: true,
+          auth_id: auth.user.id,
+          email: email
+        }).eq('numero_matricule', matricule).eq('ecole_id', ecole.id);
+        // Créer aussi un profil utilisateur pour la connexion
+        await db.from('utilisateurs').insert([{
+          id: auth.user.id,
+          nom, prenom, email, role: 'eleve',
+          telephone: tel ? '+224' + tel : null,
+          ecole_id: ecole.id,
+          actif: true,
+          compte_active: true,
+          numero_matricule: matricule
+        }]);
       } else {
         // Parent — créer un nouveau profil
         await db.from('utilisateurs').insert([{
