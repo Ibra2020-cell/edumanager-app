@@ -1281,7 +1281,38 @@ async function ouvrirModal(type) {
       '<div class="modal-actions"><button class="btn" onclick="fermerModal()">Annuler</button><button class="btn btn-primary" onclick="sauvegarderEleve()">Ajouter</button></div>';
   } else if (type === 'parent') {
     var mat = await prochainParent();
-    html = '<div class="modal-title">Ajouter un parent</div><div class="alert alert-err" id="m-err"></div><div style="background:#EAF3DE;border-radius:8px;padding:10px 12px;margin-bottom:14px;display:flex;align-items:center;gap:8px"><span style="font-size:12px;color:#3B6D11">Matricule genere automatiquement:</span><span class="mat-badge mat-badge-green">' + mat + '</span></div><div class="field-grid"><div class="field"><label>Prenom *</label><input id="m-prenom" type="text" placeholder="Fatoumata"/></div><div class="field"><label>Nom *</label><input id="m-nom" type="text" placeholder="Bah"/></div></div><div class="field"><label>Telephone (+224) *</label><input id="m-tel" type="tel" placeholder="620 000 000"/></div><div class="field"><label>Email *</label><input id="m-email" type="email" placeholder="parent@email.com"/></div><input type="hidden" id="m-mat" value="' + mat + '"/><div class="modal-actions"><button class="btn" onclick="fermerModal()">Annuler</button><button class="btn btn-primary" onclick="sauvegarderParent()">Ajouter</button></div>';
+    var rCls = await db.from('classes').select('id,nom,niveau').eq('ecole_id', ecoleId).order('niveau');
+    var clsOpts = '<option value="">Toutes les classes</option>';
+    (rCls.data||[]).forEach(function(c) { clsOpts += '<option value="' + c.id + '">' + c.nom + '</option>'; });
+    html = '<div class="modal-title">Ajouter un parent</div>' +
+      '<div class="alert alert-err" id="m-err"></div>' +
+      '<div style="background:#EAF3DE;border-radius:8px;padding:10px 12px;margin-bottom:14px;display:flex;align-items:center;gap:8px"><span style="font-size:12px;color:#3B6D11">Matricule genere automatiquement:</span><span class="mat-badge mat-badge-green">' + mat + '</span></div>' +
+      '<div style="background:#E6F1FB;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#0C447C"><strong>Info :</strong> Donnez le matricule <strong>' + mat + '</strong> et le code ecole <strong>' + (codeEcole||'') + '</strong> au parent pour qu\'il cree son compte.</div>' +
+      '<div class="field-grid">' +
+        '<div class="field"><label>Prenom *</label><input id="m-prenom" type="text" placeholder="Fatoumata"/></div>' +
+        '<div class="field"><label>Nom *</label><input id="m-nom" type="text" placeholder="Bah"/></div>' +
+      '</div>' +
+      '<div class="field"><label>Telephone (+224) *</label><input id="m-tel" type="tel" placeholder="620 000 000"/></div>' +
+      '<div class="field"><label>Lien avec les enfants</label>' +
+        '<select id="m-lien" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff">' +
+          '<option value="parent">Parent</option>' +
+          '<option value="pere">Pere</option>' +
+          '<option value="mere">Mere</option>' +
+          '<option value="tuteur">Tuteur/Tutrice</option>' +
+        '</select>' +
+      '</div>' +
+      '<div style="margin-bottom:12px">' +
+        '<div style="font-size:12px;color:#888;font-weight:500;margin-bottom:8px">Rattacher les enfants :</div>' +
+        '<div style="display:flex;gap:8px;margin-bottom:8px">' +
+          '<input type="text" id="search-enfants" placeholder="Rechercher par nom ou matricule..." oninput="rechercherEnfants()" style="flex:1;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:12px"/>' +
+          '<select id="filter-classe-parent" onchange="rechercherEnfants()" style="padding:8px;border:1px solid #ddd;border-radius:8px;font-size:12px;background:#fff">' + clsOpts + '</select>' +
+        '</div>' +
+        '<div id="resultats-enfants" style="max-height:160px;overflow-y:auto;border:1px solid #ddd;border-radius:8px;background:#fff;padding:4px"></div>' +
+        '<div style="font-size:12px;color:#888;font-weight:500;margin:8px 0 4px">Enfants selectionnes :</div>' +
+        '<div id="enfants-selectionnes" style="min-height:36px;background:#f9f9f9;border-radius:8px;padding:6px;font-size:12px;color:#aaa">Aucun enfant selectionne</div>' +
+      '</div>' +
+      '<input type="hidden" id="m-mat" value="' + mat + '"/>' +
+      '<div class="modal-actions"><button class="btn" onclick="fermerModal()">Annuler</button><button class="btn btn-primary" onclick="sauvegarderParent()">Ajouter</button></div>';
   } else if (type === 'prof') {
     var mat = await prochainProf();
     var rm = await db.from('matieres').select('id,nom').eq('ecole_id', ecoleId || '00000000-0000-0000-0000-000000000000');
@@ -1341,7 +1372,95 @@ async function sauvegarderParent() {
   alert('Parent ' + prenom + ' ' + nom + ' ajoute !\nMatricule: ' + mat);
   chargerParents();
 }
+var enfantsSelectionnes = [];
 
+async function rechercherEnfants() {
+  var search = document.getElementById('search-enfants').value.toLowerCase().trim();
+  var classeId = document.getElementById('filter-classe-parent').value;
+  if (!search && !classeId) {
+    document.getElementById('resultats-enfants').innerHTML = '<div style="padding:8px;color:#aaa;font-size:12px">Tapez un nom ou matricule pour rechercher...</div>';
+    return;
+  }
+  var query = db.from('eleves').select('id,nom,prenom,numero_matricule,classes(nom)').eq('ecole_id', ecoleId).eq('statut','actif');
+  if (classeId) query = query.eq('classe_id', classeId);
+  var res = await query.order('nom');
+  var eleves = (res.data||[]).filter(function(e) {
+    if (!search) return true;
+    return (e.prenom + ' ' + e.nom + ' ' + (e.numero_matricule||'')).toLowerCase().includes(search);
+  });
+  if (eleves.length === 0) {
+    document.getElementById('resultats-enfants').innerHTML = '<div style="padding:8px;color:#aaa;font-size:12px">Aucun eleve trouve</div>';
+    return;
+  }
+  var html = '';
+  eleves.forEach(function(e) {
+    var dejaSel = enfantsSelectionnes.find(function(x) { return x.id === e.id; });
+    if (!dejaSel) {
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-bottom:1px solid #f5f5f0">' +
+        '<div><div style="font-size:12px;font-weight:500">' + e.prenom + ' ' + e.nom + '</div>' +
+        '<div style="font-size:10px;color:#888">' + (e.classes ? e.classes.nom : '—') + ' · ' + (e.numero_matricule||'—') + '</div></div>' +
+        '<button onclick="ajouterEnfant(\'' + e.id + '\',\'' + e.prenom + ' ' + e.nom + '\',\'' + (e.classes ? e.classes.nom : '') + '\',\'' + (e.numero_matricule||'') + '\')" style="padding:3px 10px;background:#185FA5;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px">+</button>' +
+      '</div>';
+    }
+  });
+  if (!html) html = '<div style="padding:8px;color:#aaa;font-size:12px">Tous les eleves sont deja selectionnes</div>';
+  document.getElementById('resultats-enfants').innerHTML = html;
+}
+
+function ajouterEnfant(id, nom, classe, matricule) {
+  if (enfantsSelectionnes.find(function(x) { return x.id === id; })) return;
+  enfantsSelectionnes.push({ id: id, nom: nom, classe: classe, matricule: matricule });
+  afficherEnfantsSelectionnes();
+  rechercherEnfants();
+}
+
+function retirerEnfant(id) {
+  enfantsSelectionnes = enfantsSelectionnes.filter(function(x) { return x.id !== id; });
+  afficherEnfantsSelectionnes();
+}
+
+function afficherEnfantsSelectionnes() {
+  if (enfantsSelectionnes.length === 0) {
+    document.getElementById('enfants-selectionnes').innerHTML = '<span style="color:#aaa">Aucun enfant selectionne</span>';
+    return;
+  }
+  document.getElementById('enfants-selectionnes').innerHTML = enfantsSelectionnes.map(function(e) {
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 6px;background:#EAF3DE;border-radius:4px;margin-bottom:3px">' +
+      '<span style="font-size:12px;color:#27500A"><strong>' + e.nom + '</strong> · ' + e.classe + ' · ' + e.matricule + '</span>' +
+      '<button onclick="retirerEnfant(\'' + e.id + '\')" style="padding:1px 6px;background:#FCEBEB;color:#791F1F;border:1px solid #F09595;border-radius:3px;cursor:pointer;font-size:11px">✕</button>' +
+    '</div>';
+  }).join('');
+}
+
+async function sauvegarderParent() {
+  var prenom = document.getElementById('m-prenom').value.trim();
+  var nom = document.getElementById('m-nom').value.trim();
+  var tel = document.getElementById('m-tel').value.trim();
+  var lien = document.getElementById('m-lien').value;
+  var mat = document.getElementById('m-mat').value;
+  if (!prenom||!nom) { showModalErr('Prenom et nom obligatoires.'); return; }
+  if (enfantsSelectionnes.length === 0) { showModalErr('Selectionnez au moins un enfant.'); return; }
+  var parentId = crypto.randomUUID();
+  var res = await db.from('utilisateurs').insert([{
+    id: parentId,
+    nom: nom, prenom: prenom,
+    role: 'parent',
+    telephone: tel ? '+224' + tel : null,
+    ecole_id: ecoleId,
+    actif: true,
+    compte_active: false,
+    numero_matricule: mat
+  }]);
+  if (res.error) { showModalErr(res.error.message); return; }
+  var liens = enfantsSelectionnes.map(function(e) {
+    return { parent_id: parentId, eleve_id: e.id, lien: lien };
+  });
+  await db.from('parents_eleves').insert(liens);
+  fermerModal();
+  enfantsSelectionnes = [];
+  alert('Parent ' + prenom + ' ' + nom + ' ajoute avec ' + liens.length + ' enfant(s) !\n\nDonnez ces informations au parent :\n- Matricule : ' + mat + '\n- Code ecole : ' + (codeEcole||''));
+  chargerParents();
+}
 async function sauvegarderProf() {
   var prenom = document.getElementById('m-prenom').value.trim();
   var nom = document.getElementById('m-nom').value.trim();
