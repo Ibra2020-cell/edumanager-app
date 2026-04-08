@@ -115,9 +115,14 @@
       </div>
     </div>
     <div class="field">
-      <label>Code de l'établissement</label>
-      <input type="text" id="r-code" placeholder="Ex: LYC-2024-001" style="text-transform:uppercase"/>
-      <div style="font-size:11px;color:#aaa;margin-top:4px">Fourni par votre école</div>
+      <label>Code de l'établissement *</label>
+      <input type="text" id="r-code" placeholder="Ex: LD-2026-642" style="text-transform:uppercase"/>
+      <div style="font-size:11px;color:#aaa;margin-top:4px">Fourni par votre école — obligatoire</div>
+    </div>
+    <div class="field">
+      <label>Numéro matricule *</label>
+      <input type="text" id="r-matricule" placeholder="Ex: PRF-LD-26-001" style="text-transform:uppercase"/>
+      <div style="font-size:11px;color:#aaa;margin-top:4px">Fourni par votre école — obligatoire</div>
     </div>
     <button class="btn-main" id="btn-reg" onclick="doRegister()">Créer mon compte</button>
   </div>
@@ -143,9 +148,14 @@ const ROLES = {
   try {
     const { data: { session } } = await db.auth.getSession();
     if (session) {
-      const { data: u } = await db.from('utilisateurs').select('role').eq('id', session.user.id).single();
+      // Chercher par id OU par auth_id
+      let { data: u } = await db.from('utilisateurs').select('role, nom, prenom, ecole_id').eq('id', session.user.id).maybeSingle();
+      if (!u) {
+        const { data: u2 } = await db.from('utilisateurs').select('role, nom, prenom, ecole_id').eq('auth_id', session.user.id).maybeSingle();
+        u = u2;
+      }
       if (u?.role) {
-        localStorage.setItem('edu_user', JSON.stringify({ role: u.role, email: session.user.email }));
+        localStorage.setItem('edu_user', JSON.stringify({ role: u.role, nom: u.nom, prenom: u.prenom, email: session.user.email }));
         window.location.href = ROLES[u.role] || 'index.html';
       }
     }
@@ -214,12 +224,20 @@ async function doLogin() {
     const { data, error } = await db.auth.signInWithPassword({ email, password: mdp });
     if (error) throw error;
 
-    // Récupérer le profil
-    const { data: u, error: e2 } = await db
+    // Récupérer le profil — chercher par id OU par auth_id
+    let { data: u, error: e2 } = await db
       .from('utilisateurs')
       .select('role, nom, prenom, ecole_id')
       .eq('id', data.user.id)
-      .single();
+      .maybeSingle();
+    if (!u) {
+      const { data: u2 } = await db
+        .from('utilisateurs')
+        .select('role, nom, prenom, ecole_id')
+        .eq('auth_id', data.user.id)
+        .maybeSingle();
+      u = u2;
+    }
 
     if (e2 || !u) {
       // Profil manquant — créer automatiquement si c'est le super admin
@@ -265,7 +283,8 @@ async function doRegister() {
   const mdp    = document.getElementById('r-mdp').value;
   const code   = document.getElementById('r-code').value.trim().toUpperCase();
 
-  if (!prenom||!nom||!email||!mdp||!code) return showErr('err-reg','Remplissez tous les champs.');
+  const matricule = document.getElementById('r-matricule').value.trim().toUpperCase();
+    if (!prenom||!nom||!email||!mdp||!code||!matricule) return showErr('err-reg','Remplissez tous les champs obligatoires.');
 
   // Valider mot de passe
   if (mdp.length < 8)           return showErr('err-reg','Mot de passe trop court (min. 8 caractères).');
@@ -284,19 +303,44 @@ async function doRegister() {
     if (eErr || !ecole) return showErr('err-reg','Code établissement invalide. Vérifiez avec votre école.');
     if (!ecole.abonnement_actif) return showErr('err-reg','Cet établissement n\'a pas d\'abonnement actif.');
 
-    // Créer le compte
+    // Vérifier matricule pour prof et élève
+    if (role === 'professeur' || role === 'eleve') {
+      const { data: profilExist } = await db.from('utilisateurs')
+        .select('id, compte_active, email')
+        .eq('numero_matricule', matricule)
+        .eq('ecole_id', ecole.id)
+        .maybeSingle();
+      if (!profilExist) return showErr('err-reg', 'Matricule invalide. Vérifiez avec votre directeur.');
+      if (profilExist.compte_active) return showErr('err-reg', 'Ce matricule a déjà un compte actif.');
+    }
+
+    // Créer le compte Auth
     const { data: auth, error: aErr } = await db.auth.signUp({ email, password: mdp });
     if (aErr) throw aErr;
 
-    // Créer le profil
+    // Créer ou lier le profil
     if (auth.user) {
-      await db.from('utilisateurs').insert([{
-        id: auth.user.id,
-        nom, prenom, email, role,
-        telephone: '+224' + tel,
-        ecole_id: ecole.id,
-        actif: true
-      }]);
+      if (role === 'professeur' || role === 'eleve') {
+        // Lier le compte Auth au profil existant créé par le directeur
+        await db.from('utilisateurs').update({
+          auth_id: auth.user.id,
+          email: email,
+          compte_active: true,
+          actif: true,
+          telephone: tel ? '+224' + tel : null
+        }).eq('numero_matricule', matricule).eq('ecole_id', ecole.id);
+      } else {
+        // Parent — créer un nouveau profil
+        await db.from('utilisateurs').insert([{
+          id: auth.user.id,
+          nom, prenom, email, role,
+          telephone: '+224' + tel,
+          ecole_id: ecole.id,
+          actif: true,
+          compte_active: true,
+          numero_matricule: matricule
+        }]);
+      }
     }
 
     showOk('ok-reg', `✅ Compte créé pour ${ecole.nom} ! Vérifiez votre email puis connectez-vous.`);

@@ -1281,7 +1281,7 @@ async function ouvrirModal(type) {
     var rm = await db.from('matieres').select('id,nom').eq('ecole_id', ecoleId || '00000000-0000-0000-0000-000000000000');
     var optsm = '<option value="">Selectionner...</option>';
     (rm.data || []).forEach(function(m) { optsm += '<option value="' + m.id + '">' + m.nom + '</option>'; });
-    html = '<div class="modal-title">Ajouter un professeur</div><div class="alert alert-err" id="m-err"></div><div style="background:#EAF3DE;border-radius:8px;padding:10px 12px;margin-bottom:14px;display:flex;align-items:center;gap:8px"><span style="font-size:12px;color:#3B6D11">Matricule genere automatiquement:</span><span class="mat-badge mat-badge-green">' + mat + '</span></div><div class="field-grid"><div class="field"><label>Prenom *</label><input id="m-prenom" type="text" placeholder="Mamadou"/></div><div class="field"><label>Nom *</label><input id="m-nom" type="text" placeholder="Barry"/></div></div><div class="field"><label>Email *</label><input id="m-email" type="email" placeholder="prof@email.com"/></div><div class="field"><label>Telephone (+224)</label><input id="m-tel" type="tel" placeholder="620 000 000"/></div><div class="field"><label>Matiere principale</label><select id="m-matiere">' + optsm + '</select></div><input type="hidden" id="m-mat" value="' + mat + '"/><div class="modal-actions"><button class="btn" onclick="fermerModal()">Annuler</button><button class="btn btn-primary" onclick="sauvegarderProf()">Ajouter</button></div>';
+    html = '<div class="modal-title">Ajouter un professeur</div><div class="alert alert-err" id="m-err"></div><div style="background:#EAF3DE;border-radius:8px;padding:10px 12px;margin-bottom:14px;display:flex;align-items:center;gap:8px"><span style="font-size:12px;color:#3B6D11">Matricule genere automatiquement:</span><span class="mat-badge mat-badge-green">' + mat + '</span></div><div style="background:#E6F1FB;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#0C447C"><strong>Info :</strong> Donnez le matricule et le code ecole <strong>' + (codeEcole||'') + '</strong> au professeur pour qu\'il cree son compte.</div><div class="field-grid"><div class="field"><label>Prenom *</label><input id="m-prenom" type="text" placeholder="Mamadou"/></div><div class="field"><label>Nom *</label><input id="m-nom" type="text" placeholder="Barry"/></div></div><div class="field"><label>Telephone (+224)</label><input id="m-tel" type="tel" placeholder="620 000 000"/></div><input type="hidden" id="m-mat" value="' + mat + '"/><div class="modal-actions"><button class="btn" onclick="fermerModal()">Annuler</button><button class="btn btn-primary" onclick="sauvegarderProf()">Ajouter</button></div>';
   } else if (type === 'classe') {
     var niv = NIVEAUX.map(function(n) { return '<option value="' + n + '">' + n + '</option>'; }).join('');
     html = '<div class="modal-title">Creer une classe</div><div class="alert alert-err" id="m-err"></div><div class="field"><label>Nom de la classe *</label><input id="m-nom-cls" type="text" placeholder="Ex: 7eme A"/></div><div class="field"><label>Niveau *</label><select id="m-niveau">' + niv + '</select></div><div class="field"><label>Annee scolaire *</label><input id="m-annee" type="text" value="2025-2026"/></div><div class="modal-actions"><button class="btn" onclick="fermerModal()">Annuler</button><button class="btn btn-primary" onclick="sauvegarderClasse()">Creer</button></div>';
@@ -1326,14 +1326,23 @@ async function sauvegarderParent() {
 async function sauvegarderProf() {
   var prenom = document.getElementById('m-prenom').value.trim();
   var nom = document.getElementById('m-nom').value.trim();
-  var email = document.getElementById('m-email').value.trim();
   var tel = document.getElementById('m-tel').value.trim();
   var mat = document.getElementById('m-mat').value;
-  if (!prenom || !nom || !email) { showModalErr('Prenom, nom et email obligatoires.'); return; }
-  var res = await db.from('utilisateurs').insert([{ id: crypto.randomUUID(), nom: nom, prenom: prenom, email: email, role: 'professeur', telephone: tel ? '+224' + tel : null, ecole_id: ecoleId, actif: true, numero_matricule: mat }]);
+  if (!prenom || !nom) { showModalErr('Prenom et nom obligatoires.'); return; }
+  var res = await db.from('utilisateurs').insert([{
+    id: crypto.randomUUID(),
+    nom: nom,
+    prenom: prenom,
+    role: 'professeur',
+    telephone: tel ? '+224' + tel : null,
+    ecole_id: ecoleId,
+    actif: true,
+    compte_active: false,
+    numero_matricule: mat
+  }]);
   if (res.error) { showModalErr(res.error.message); return; }
   fermerModal();
-  alert('Professeur ' + prenom + ' ' + nom + ' ajoute !\nMatricule: ' + mat);
+  alert('Professeur ' + prenom + ' ' + nom + ' ajoute !\nMatricule: ' + mat + '\n\nDonnez ces informations au professeur :\n- Matricule : ' + mat + '\n- Code ecole : ' + codeEcole);
   chargerProfesseurs();
 }
 
