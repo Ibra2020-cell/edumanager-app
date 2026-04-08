@@ -1246,8 +1246,7 @@ function genererModalEvenement() {
 }
 function fermerModal() { document.getElementById('modal-bg').classList.remove('open'); }
 
- {
-  async function sauvegarderEleve() {
+ async function sauvegarderEleve() {
   const prenom = document.getElementById('m-prenom').value.trim();
   const nom = document.getElementById('m-nom').value.trim();
   const classeId = document.getElementById('m-classe').value;
@@ -1259,8 +1258,7 @@ function fermerModal() { document.getElementById('modal-bg').classList.remove('o
   if (error) { showModalErr(error.message); return; }
   fermerModal();
   alert(`✅ ${prenom} ${nom} ajouté(e) !\n📋 Matricule : ${matricule}`);
-  await chargerEleves();
-}
+ await chargerEleves();
 }
 
 async function sauvegarderClasse() {
