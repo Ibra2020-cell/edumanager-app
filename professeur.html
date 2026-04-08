@@ -366,6 +366,9 @@ let compData = {};
     if (ecoles?.length) {
       ecoleId = ecoles[0].id;
       document.getElementById('school-name').textContent = ecoles[0].nom;
+      // En mode demo, prendre le premier professeur disponible
+      const { data: profs } = await db.from('utilisateurs').select('id').eq('ecole_id', ecoles[0].id).eq('role', 'professeur').limit(1);
+      if (profs?.length) profId = profs[0].id;
     }
   } else {
     try {
@@ -444,8 +447,9 @@ async function peuplerSelectClasses() {
 // ============================================
 async function chargerDashboard() {
   try {
-    const nbClasses = mesClasses.length || 0;
-    document.getElementById('d-classes').textContent = nbClasses;
+    const { data: coursProf } = await db.from('cours_assignes').select('classe_id').eq('ecole_id', ecoleId).eq('professeur_id', profId || '00000000-0000-0000-0000-000000000000');
+    const classesUniques = [...new Set((coursProf||[]).map(c => c.classe_id))];
+    document.getElementById('d-classes').textContent = classesUniques.length;
     document.getElementById('d-eleves').textContent = '—';
     document.getElementById('d-notes').textContent = '—';
     document.getElementById('d-heures').textContent = '—';
@@ -502,21 +506,131 @@ async function chargerMesClasses() {
   document.getElementById('load-classes').style.display = 'block';
   document.getElementById('cont-classes').style.display = 'none';
   if (!ecoleId) return;
-  const { data: classes } = await db.from('classes').select('*').eq('ecole_id', ecoleId);
-  const html = (classes||[]).length === 0
-    ? '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">👥</div>Aucune classe.</div>'
-    : await Promise.all((classes||[]).map(async c => {
-        const { count } = await db.from('eleves').select('id', { count: 'exact' }).eq('classe_id', c.id);
-        return `<div class="card" style="margin-bottom:0">
-          <div style="font-size:16px;font-weight:700;color:#3C3489;margin-bottom:4px">${c.nom}</div>
-          <div style="font-size:12px;color:#888;margin-bottom:8px">${c.niveau} · ${c.annee_scolaire}</div>
-          <div style="font-size:13px;margin-bottom:10px"><span style="font-weight:600">${count||0}</span> élèves</div>
-          <button class="btn-sm" onclick="voirElevesClasse('${c.id}','${c.nom}')">Voir les élèves</button>
-        </div>`;
-      }));
-  document.getElementById('cont-classes').innerHTML = Array.isArray(html) ? html.join('') : html;
+
+  // Récupérer uniquement les cours assignés à ce prof
+  const { data: coursAssignes } = await db.from('cours_assignes')
+    .select('*, matieres(id,nom,coefficient), classes(id,nom,niveau,annee_scolaire)')
+    .eq('ecole_id', ecoleId)
+    .eq('professeur_id', profId || '00000000-0000-0000-0000-000000000000');
+
+  if (!coursAssignes || coursAssignes.length === 0) {
+    document.getElementById('cont-classes').innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">📚</div>Aucun cours assigné.<br><span style="font-size:12px">Contactez votre directeur pour qu\'il vous assigne des cours.</span></div>';
+    document.getElementById('load-classes').style.display = 'none';
+    document.getElementById('cont-classes').style.display = 'grid';
+    return;
+  }
+
+  // Grouper par classe
+  const parClasse = {};
+  coursAssignes.forEach(function(c) {
+    const cid = c.classe_id;
+    if (!parClasse[cid]) parClasse[cid] = { classe: c.classes, matieres: [] };
+    if (c.matieres) parClasse[cid].matieres.push(c.matieres);
+  });
+
+  const htmlParts = await Promise.all(Object.values(parClasse).map(async function(item) {
+    const { count } = await db.from('eleves').select('id', { count: 'exact' }).eq('classe_id', item.classe.id);
+    const matieresBadges = item.matieres.map(function(m) {
+      return '<span style="display:inline-block;background:#EEEDFE;color:#3C3489;border-radius:4px;padding:2px 8px;font-size:11px;margin:2px">' + m.nom + '</span>';
+    }).join('');
+    return '<div class="card" style="margin-bottom:0">' +
+      '<div style="font-size:16px;font-weight:700;color:#3C3489;margin-bottom:4px">' + item.classe.nom + '</div>' +
+      '<div style="font-size:12px;color:#888;margin-bottom:8px">' + item.classe.niveau + ' · ' + item.classe.annee_scolaire + '</div>' +
+      '<div style="margin-bottom:8px">' + matieresBadges + '</div>' +
+      '<div style="font-size:13px;margin-bottom:10px"><span style="font-weight:600">' + (count||0) + '</span> élèves</div>' +
+      '<div style="display:flex;gap:6px">' +
+        '<button class="btn-sm" onclick="voirElevesClasse(\'' + item.classe.id + '\',\'' + item.classe.nom + '\')">Voir élèves</button>' +
+        item.matieres.map(function(m) {
+          return '<button class="btn-sm" style="background:#534AB7;color:#fff;border-color:#534AB7" onclick="ouvrirSaisieNotes(\'' + item.classe.id + '\',\'' + item.classe.nom + '\',\'' + m.id + '\',\'' + m.nom + '\',' + m.coefficient + ')">Notes ' + m.nom + '</button>';
+        }).join('') +
+      '</div>' +
+    '</div>';
+  }));
+
+  document.getElementById('cont-classes').innerHTML = htmlParts.join('');
   document.getElementById('load-classes').style.display = 'none';
   document.getElementById('cont-classes').style.display = 'grid';
+}
+
+async function ouvrirSaisieNotes(classeId, classeNom, matiereId, matiereNom, coef) {
+  const { data: eleves } = await db.from('eleves').select('id,nom,prenom,numero_matricule').eq('classe_id', classeId).eq('statut','actif').order('nom');
+  const { data: notesExist } = await db.from('notes').select('*').eq('classe_id', classeId).eq('matiere_id', matiereId);
+
+  const periode = document.getElementById('notes-periode') ? document.getElementById('notes-periode').value : 'T1';
+
+  const lignes = (eleves||[]).map(function(e) {
+    const noteExist = (notesExist||[]).find(function(n) { return n.eleve_id === e.id; });
+    return '<tr>' +
+      '<td><span style="font-size:11px;font-family:monospace;color:#888">' + (e.numero_matricule||'—') + '</span></td>' +
+      '<td style="font-weight:500">' + e.prenom + ' ' + e.nom + '</td>' +
+      '<td><input type="number" id="note-' + e.id + '" min="0" max="20" step="0.25" value="' + (noteExist ? noteExist.valeur : '') + '" placeholder="—" style="width:70px;padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;text-align:center"/></td>' +
+      '<td><input type="text" id="app-' + e.id + '" value="' + (noteExist ? (noteExist.appreciation||'') : '') + '" placeholder="Appreciation..." style="padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;width:180px"/></td>' +
+    '</tr>';
+  }).join('');
+
+  document.getElementById('modal-content').innerHTML =
+    '<div class="modal-title">📊 Notes — ' + matiereNom + ' · ' + classeNom + '</div>' +
+    '<div style="display:flex;gap:8px;margin-bottom:14px;align-items:center">' +
+      '<span style="font-size:12px;color:#888">Coefficient : <strong>' + coef + '</strong></span>' +
+      '<select id="saisie-periode" style="margin-left:auto;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;background:#fff">' +
+        '<option value="T1">Trimestre 1</option>' +
+        '<option value="T2">Trimestre 2</option>' +
+        '<option value="T3">Trimestre 3</option>' +
+        '<option value="M1">Mois 1</option>' +
+        '<option value="M2">Mois 2</option>' +
+        '<option value="M3">Mois 3</option>' +
+      '</select>' +
+    '</div>' +
+    '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
+      '<thead><tr style="border-bottom:1px solid #e8e8e8">' +
+        '<th style="padding:8px 0;font-size:11px;color:#999;text-align:left">Matricule</th>' +
+        '<th style="padding:8px 0;font-size:11px;color:#999;text-align:left">Eleve</th>' +
+        '<th style="padding:8px 0;font-size:11px;color:#999;text-align:left">Note /20</th>' +
+        '<th style="padding:8px 0;font-size:11px;color:#999;text-align:left">Appreciation</th>' +
+      '</tr></thead>' +
+      '<tbody>' + lignes + '</tbody>' +
+    '</table>' +
+    '<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">' +
+      '<button class="btn" onclick="fermerModal()">Annuler</button>' +
+      '<button class="btn btn-primary" onclick="enregistrerNotesProf(\'' + classeId + '\',\'' + matiereId + '\',[' + (eleves||[]).map(function(e){return '\''+e.id+'\'';}).join(',') + '])">Enregistrer les notes</button>' +
+    '</div>';
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+async function enregistrerNotesProf(classeId, matiereId, eleveIds) {
+  const periode = document.getElementById('saisie-periode').value;
+  const insertions = [];
+  const updates = [];
+
+  for (const eleveId of eleveIds) {
+    const noteVal = document.getElementById('note-' + eleveId).value;
+    const appVal = document.getElementById('app-' + eleveId).value;
+    if (noteVal === '') continue;
+
+    const { data: exist } = await db.from('notes').select('id').eq('eleve_id', eleveId).eq('matiere_id', matiereId).eq('periode', periode).maybeSingle();
+    if (exist) {
+      await db.from('notes').update({ valeur: parseFloat(noteVal), appreciation: appVal || null }).eq('id', exist.id);
+    } else {
+      insertions.push({
+        ecole_id: ecoleId,
+        eleve_id: eleveId,
+        matiere_id: matiereId,
+        professeur_id: profId || null,
+        classe_id: classeId,
+        valeur: parseFloat(noteVal),
+        periode: periode,
+        appreciation: appVal || null
+      });
+    }
+  }
+
+  if (insertions.length > 0) {
+    const { error } = await db.from('notes').insert(insertions);
+    if (error) { alert('Erreur : ' + error.message); return; }
+  }
+
+  fermerModal();
+  alert('Notes enregistrees avec succes !');
 }
 
 // ============================================
