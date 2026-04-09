@@ -282,9 +282,20 @@ let mesEnfants = [];
   const piEmail = document.getElementById('pi-email-display');
   if (piEmail) piEmail.textContent = currentUser.email || '—';
   // Charger les enfants du parent
-  if (currentUser.id && ecoleId) {
-    const { data: liens } = await db.from('parents_eleves').select('*, eleves(id, nom, prenom, numero_matricule, classes(nom, niveau))').eq('parent_id', currentUser.id);
+  if (ecoleId) {
+    // Chercher l'id du parent dans utilisateurs via auth_id OU id direct
+    var parentId = currentUser.id;
+    var { data: profil } = await db.from('utilisateurs')
+      .select('id')
+      .eq('auth_id', parentId)
+      .maybeSingle();
+    if (profil) parentId = profil.id;
+    
+    const { data: liens } = await db.from('parents_eleves')
+      .select('*, eleves(id, nom, prenom, numero_matricule, classes(nom, niveau))')
+      .eq('parent_id', parentId);
     mesEnfants = (liens||[]).map(function(l) { return l.eleves; }).filter(Boolean);
+    currentUser.id = parentId;
   }
   await chargerDashboard();
 })();

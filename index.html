@@ -63,8 +63,13 @@
     <div id="err-login" class="error"></div>
     <div id="ok-login" class="success"></div>
     <div class="field">
-      <label>Email</label>
-      <input type="email" id="l-email" placeholder="votre@email.com"/>
+      <label>Matricule</label>
+      <input type="text" id="l-matricule" placeholder="Ex: PRF-LD-26-001" style="text-transform:uppercase" onkeydown="if(event.key==='Enter')doLogin()"/>
+      <div style="font-size:11px;color:#aaa;margin-top:4px">Votre matricule fourni par votre école</div>
+    </div>
+    <div class="field">
+      <label>Code établissement</label>
+      <input type="text" id="l-code" placeholder="Ex: LD-2026-642" style="text-transform:uppercase" onkeydown="if(event.key==='Enter')doLogin()"/>
     </div>
     <div class="field">
       <label>Mot de passe</label>
@@ -84,19 +89,23 @@
     <div id="ok-reg" class="success"></div>
     <div class="field">
       <label>Je suis un...</label>
-      <select id="r-role">
+      <select id="r-role" onchange="onRoleChange()">
         <option value="parent">Parent</option>
         <option value="eleve">Élève</option>
         <option value="professeur">Professeur</option>
       </select>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <div id="champs-nom" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div class="field"><label>Prénom</label><input type="text" id="r-prenom" placeholder="Mamadou"/></div>
       <div class="field"><label>Nom</label><input type="text" id="r-nom" placeholder="Diallo"/></div>
     </div>
     <div class="field">
       <label>Téléphone (+224)</label>
-      <input type="tel" id="r-tel" placeholder="620 000 000"/>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="padding:11px 10px;background:#f5f5f0;border:1px solid #ddd;border-radius:8px;font-size:13px;color:#555">+224</span>
+        <input type="tel" id="r-tel" placeholder="6XXXXXXXX" maxlength="9" style="flex:1" oninput="validerTel(this)"/>
+      </div>
+      <div id="tel-err" style="font-size:11px;color:#E24B4A;margin-top:3px;display:none">Numéro invalide — 9 chiffres commençant par 6</div>
     </div>
     <div class="field"><label>Email</label><input type="email" id="r-email" placeholder="votre@email.com"/></div>
     <div class="field">
@@ -163,6 +172,29 @@ const ROLES = {
 })();
 
 // ============ UI ============
+function validerTel(input) {
+  var val = input.value.replace(/\D/g, '');
+  input.value = val;
+  var err = document.getElementById('tel-err');
+  if (val.length > 0 && (val.length !== 9 || val[0] !== '6')) {
+    err.style.display = 'block';
+  } else {
+    err.style.display = 'none';
+  }
+}
+
+function onRoleChange() {
+  var role = document.getElementById('r-role').value;
+  var champsNom = document.getElementById('champs-nom');
+  var matriculeField = document.getElementById('r-matricule').parentElement;
+  if (role === 'professeur' || role === 'eleve') {
+    champsNom.style.display = 'none';
+    champsNom.querySelector('#r-prenom').removeAttribute('required');
+    champsNom.querySelector('#r-nom').removeAttribute('required');
+  } else {
+    champsNom.style.display = 'grid';
+  }
+}
 function switchTab(t) {
   document.querySelectorAll('.tab').forEach((el,i) => el.classList.toggle('active', (t==='login'&&i===0)||(t==='register'&&i===1)));
   document.getElementById('form-login').style.display = t==='login' ? 'block' : 'none';
@@ -213,9 +245,13 @@ function checkForce(mdp) {
 
 // ============ CONNEXION ============
 async function doLogin() {
-  const email = document.getElementById('l-email').value.trim();
-  const mdp   = document.getElementById('l-mdp').value;
-  if (!email || !mdp) return showErr('err-login','Remplissez tous les champs.');
+  const matricule = document.getElementById('l-matricule').value.trim().toUpperCase();
+  const code = document.getElementById('l-code').value.trim().toUpperCase();
+  const mdp = document.getElementById('l-mdp').value;
+  if (!matricule || !code || !mdp) return showErr('err-login','Remplissez tous les champs.');
+
+  // Générer email interne depuis matricule + code
+  const email = matricule.replace(/-/g,'').toLowerCase() + '@' + code.replace(/-/g,'').toLowerCase() + '.gn';
 
   const btn = document.getElementById('btn-login');
   btn.disabled = true; btn.textContent = 'Connexion...';
@@ -284,7 +320,9 @@ async function doRegister() {
   const code   = document.getElementById('r-code').value.trim().toUpperCase();
 
   const matricule = document.getElementById('r-matricule').value.trim().toUpperCase();
-    if (!prenom||!nom||!email||!mdp||!code||!matricule) return showErr('err-reg','Remplissez tous les champs obligatoires.');
+    if (role === 'parent' && (!prenom||!nom)) return showErr('err-reg','Prénom et nom obligatoires.');
+  if (!email||!mdp||!code) return showErr('err-reg','Remplissez tous les champs obligatoires.');
+  if (tel && (tel.length !== 9 || tel[0] !== '6')) return showErr('err-reg','Numéro de téléphone invalide — 9 chiffres commençant par 6.');
 
   // Valider mot de passe
   if (mdp.length < 8)           return showErr('err-reg','Mot de passe trop court (min. 8 caractères).');
@@ -356,20 +394,37 @@ async function doRegister() {
           numero_matricule: matricule
         }]);
       } else {
-        // Parent — créer un nouveau profil
-        await db.from('utilisateurs').insert([{
-          id: auth.user.id,
-          nom, prenom, email, role,
-          telephone: '+224' + tel,
-          ecole_id: ecole.id,
-          actif: true,
-          compte_active: true,
-          numero_matricule: matricule
-        }]);
+        // Parent — vérifier si matricule existe et lier
+        if (matricule) {
+          const { data: parentExist } = await db.from('utilisateurs')
+            .select('id, compte_active')
+            .eq('numero_matricule', matricule)
+            .eq('ecole_id', ecole.id)
+            .maybeSingle();
+          if (!parentExist) return showErr('err-reg', 'Matricule invalide. Vérifiez avec votre directeur.');
+          if (parentExist.compte_active) return showErr('err-reg', 'Ce matricule a déjà un compte actif.');
+          await db.from('utilisateurs').update({
+            auth_id: auth.user.id,
+            email: email,
+            compte_active: true,
+            actif: true,
+            telephone: tel ? '+224' + tel : null
+          }).eq('id', parentExist.id);
+        } else {
+          await db.from('utilisateurs').insert([{
+            id: auth.user.id,
+            nom, prenom, email, role,
+            telephone: tel ? '+224' + tel : null,
+            ecole_id: ecole.id,
+            actif: true,
+            compte_active: true
+          }]);
+        }
       }
     }
 
-    showOk('ok-reg', `✅ Compte créé pour ${ecole.nom} ! Vérifiez votre email puis connectez-vous.`);
+    showOk('ok-reg', `✅ Compte créé pour ${ecole.nom} ! Redirection en cours...`);
+setTimeout(function() { window.location.href = 'index.html'; }, 2000);
 
   } catch(e) {
     showErr('err-reg', e.message || 'Erreur lors de la création.');

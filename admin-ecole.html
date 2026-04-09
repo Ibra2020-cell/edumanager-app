@@ -429,7 +429,17 @@ function matriculeParent(code, an, n) {
   var s = String(n).padStart(3, '0');
   return 'PAR-' + c + '-' + a + '-' + s;
 }
+function genererEmail(matricule, code) {
+  var mat = matricule.replace(/-/g, '').toLowerCase();
+  var c = (code||'').replace(/-/g, '').toLowerCase();
+  return mat + '@' + c + '.gn';
+}
 
+function genererMotDePasse(matricule) {
+  var sec = new Date().getSeconds().toString().padStart(2,'0');
+  var lettres = matricule.replace(/-/g, '').substring(0,3).toUpperCase();
+  return sec + lettres + '!';
+}
 async function prochainEleve() {
   var res = await db.from('eleves').select('id', { count: 'exact' }).eq('ecole_id', ecoleId || '00000000-0000-0000-0000-000000000000');
   return matriculeEleve(codeEcole, new Date().getFullYear(), (res.count || 0) + 1);
@@ -779,16 +789,63 @@ async function modifierParent(id) {
     '</div>' +
     '<div class="field"><label>Telephone (+224)</label><input id="m-tel" type="tel" value="' + (parent.telephone||'') + '"/></div>' +
     '<div style="margin-bottom:12px">' +
-      '<div style="font-size:12px;color:#888;font-weight:500;margin-bottom:6px">Enfants rattaches :</div>' +
-      '<div id="liste-enfants-parent">' + enfantsHtml + '</div>' +
-    '</div>' +
+'<div style="font-size:12px;color:#888;font-weight:500;margin-bottom:6px">Enfants rattaches :</div>' +
+'<div id="liste-enfants-parent">' + enfantsHtml + '</div>' +
+'<div style="margin-top:8px">' +
+'<div style="font-size:12px;color:#888;font-weight:500;margin-bottom:6px">Ajouter un enfant :</div>' +
+'<div style="display:flex;gap:8px;margin-bottom:6px">' +
+'<input type="text" id="search-enfant-modif" placeholder="Rechercher par nom ou matricule..." oninput="rechercherEnfantModif(\'' + id + '\')" style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px"/>' +
+'<select id="filter-classe-modif" onchange="rechercherEnfantModif(\'' + id + '\')" style="padding:7px;border:1px solid #ddd;border-radius:6px;font-size:12px;background:#fff">' +
+'<option value="">Toutes classes</option>' +
+toutesClasses.map(function(c) { return '<option value="' + c.id + '">' + c.nom + '</option>'; }).join('') +
+'</select>' +
+'</div>' +
+'<div id="resultats-enfant-modif" style="max-height:120px;overflow-y:auto;border:1px solid #ddd;border-radius:6px;background:#fff;padding:4px"><div style="padding:6px;color:#aaa;font-size:12px">Tapez pour rechercher...</div></div>' +
+'</div>' +
+'</div>' +
     '<div class="modal-actions">' +
       '<button class="btn" onclick="fermerModal()">Annuler</button>' +
       '<button class="btn btn-primary" onclick="sauvegarderModifParent(\'' + id + '\')">Enregistrer</button>' +
     '</div>';
   document.getElementById('modal-bg').classList.add('open');
 }
+async function rechercherEnfantModif(parentId) {
+  var search = document.getElementById('search-enfant-modif').value.toLowerCase().trim();
+  var classeId = document.getElementById('filter-classe-modif').value;
+  if (!search && !classeId) {
+    document.getElementById('resultats-enfant-modif').innerHTML = '<div style="padding:6px;color:#aaa;font-size:12px">Tapez pour rechercher...</div>';
+    return;
+  }
+  var query = db.from('eleves').select('id,nom,prenom,numero_matricule,classes(nom)').eq('ecole_id', ecoleId).eq('statut','actif');
+  if (classeId) query = query.eq('classe_id', classeId);
+  var res = await query.order('nom');
+  var eleves = (res.data||[]).filter(function(e) {
+    if (!search) return true;
+    return (e.prenom+' '+e.nom+' '+(e.numero_matricule||'')).toLowerCase().includes(search);
+  });
+  // Exclure les enfants deja rattaches
+  var resExist = await db.from('parents_eleves').select('eleve_id').eq('parent_id', parentId);
+  var existIds = (resExist.data||[]).map(function(x) { return x.eleve_id; });
+  eleves = eleves.filter(function(e) { return !existIds.includes(e.id); });
+  if (eleves.length === 0) {
+    document.getElementById('resultats-enfant-modif').innerHTML = '<div style="padding:6px;color:#aaa;font-size:12px">Aucun eleve trouve</div>';
+    return;
+  }
+  document.getElementById('resultats-enfant-modif').innerHTML = eleves.map(function(e) {
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-bottom:1px solid #f5f5f0">' +
+      '<div><div style="font-size:12px;font-weight:500">' + e.prenom + ' ' + e.nom + '</div>' +
+      '<div style="font-size:10px;color:#888">' + (e.classes?e.classes.nom:'—') + ' · ' + (e.numero_matricule||'—') + '</div></div>' +
+      '<button onclick="ajouterEnfantParent(\'' + parentId + '\',\'' + e.id + '\')" style="padding:3px 10px;background:#185FA5;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px">+</button>' +
+    '</div>';
+  }).join('');
+}
 
+async function ajouterEnfantParent(parentId, eleveId) {
+  var res = await db.from('parents_eleves').insert([{ parent_id: parentId, eleve_id: eleveId, lien: 'parent' }]);
+  if (res.error) { alert('Erreur : ' + res.error.message); return; }
+  alert('Enfant rattache avec succes !');
+  await modifierParent(parentId);
+}
 async function retirerEnfantParent(parentId, eleveId) {
   if (!confirm('Retirer cet enfant du parent ?')) return;
   await db.from('parents_eleves').delete().eq('parent_id', parentId).eq('eleve_id', eleveId);
@@ -809,6 +866,7 @@ async function sauvegarderModifParent(id) {
   alert('Parent modifie avec succes !');
   chargerParents();
 }
+
 async function supprimerParent(id, nom) {
   if (!confirm('Supprimer le parent ' + nom + ' ?')) return;
   await db.from('utilisateurs').delete().eq('id', id);
@@ -1498,9 +1556,24 @@ async function sauvegarderEleve() {
   var sexe = document.getElementById('m-sexe').value;
   var mat = document.getElementById('m-mat').value.trim().toUpperCase();
   if (!prenom || !nom || !mat) { showModalErr('Prenom, nom et matricule obligatoires.'); return; }
+
   // Vérifier que le matricule n'existe pas déjà
   var exist = await db.from('eleves').select('id').eq('numero_matricule', mat).eq('ecole_id', ecoleId).maybeSingle();
   if (exist.data) { showModalErr('Ce matricule existe deja dans votre ecole.'); return; }
+
+  // Générer email interne et mot de passe temporaire
+  var emailInterne = genererEmail(mat, codeEcole);
+  var mdpTemp = genererMotDePasse(mat);
+
+  // Créer le compte Supabase Auth
+  var authRes = await fetch('https://rcojerlzguwqpclyudjo.supabase.co/auth/v1/signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjb2plcmx6Z3V3cXBjbHl1ZGpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NTg1MzIsImV4cCI6MjA5MTAzNDUzMn0.4R_NOrYLdhkVMKw87Z33FLS9LoAUAgVj_Uk_RBCf8tg' },
+    body: JSON.stringify({ email: emailInterne, password: mdpTemp })
+  }).then(r => r.json());
+
+  var authId = authRes.user ? authRes.user.id : (authRes.id || null);
+
   var res = await db.from('eleves').insert([{
     ecole_id: ecoleId,
     prenom: prenom,
@@ -1510,11 +1583,33 @@ async function sauvegarderEleve() {
     sexe: sexe,
     numero_matricule: mat,
     statut: 'actif',
-    compte_active: false
+    compte_active: true,
+    auth_id: authId,
+    email: emailInterne,
+    mdp_temp: mdpTemp,
+    premiere_connexion: true
   }]);
   if (res.error) { showModalErr(res.error.message); return; }
+
+  // Créer aussi dans utilisateurs pour la connexion
+  if (authId) {
+    await db.from('utilisateurs').insert([{
+      id: authId,
+      nom: nom, prenom: prenom,
+      role: 'eleve',
+      ecole_id: ecoleId,
+      actif: true,
+      compte_active: true,
+      numero_matricule: mat,
+      email: emailInterne,
+      auth_id: authId,
+      mdp_temp: mdpTemp,
+      premiere_connexion: true
+    }]);
+  }
+
   fermerModal();
-  alert('Eleve ' + prenom + ' ' + nom + ' ajoute !\nMatricule: ' + mat + '\n\nDonnez ces informations a l\'eleve :\n- Matricule : ' + mat + '\n- Code ecole : ' + (codeEcole||''));
+  alert('✅ Eleve ' + prenom + ' ' + nom + ' ajoute !\n\n📋 IDENTIFIANTS DE CONNEXION :\n─────────────────────────\nMatricule : ' + mat + '\nMot de passe : ' + mdpTemp + '\n─────────────────────────\n⚠️ Donnez ces identifiants a l\'eleve.\nIl devra changer son mot de passe a la premiere connexion.');
   chargerEleves();
 }
 
@@ -1522,13 +1617,50 @@ async function sauvegarderParent() {
   var prenom = document.getElementById('m-prenom').value.trim();
   var nom = document.getElementById('m-nom').value.trim();
   var tel = document.getElementById('m-tel').value.trim();
-  var email = document.getElementById('m-email').value.trim();
+  var lien = document.getElementById('m-lien') ? document.getElementById('m-lien').value : 'parent';
   var mat = document.getElementById('m-mat').value;
-  if (!prenom || !nom || !email) { showModalErr('Prenom, nom et email obligatoires.'); return; }
-  var res = await db.from('utilisateurs').insert([{ id: crypto.randomUUID(), nom: nom, prenom: prenom, email: email, role: 'parent', telephone: tel ? '+224' + tel : null, ecole_id: ecoleId, actif: true, numero_matricule: mat }]);
+  if (!prenom || !nom) { showModalErr('Prenom et nom obligatoires.'); return; }
+  if (enfantsSelectionnes.length === 0) { showModalErr('Selectionnez au moins un enfant.'); return; }
+
+  // Générer email interne et mot de passe temporaire
+  var emailInterne = genererEmail(mat, codeEcole);
+  var mdpTemp = genererMotDePasse(mat);
+
+  // Créer le compte Supabase Auth
+  var authRes = await fetch('https://rcojerlzguwqpclyudjo.supabase.co/auth/v1/signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjb2plcmx6Z3V3cXBjbHl1ZGpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NTg1MzIsImV4cCI6MjA5MTAzNDUzMn0.4R_NOrYLdhkVMKw87Z33FLS9LoAUAgVj_Uk_RBCf8tg' },
+    body: JSON.stringify({ email: emailInterne, password: mdpTemp })
+  }).then(r => r.json());
+
+  var authId = authRes.user ? authRes.user.id : (authRes.id || null);
+  var parentId = authId || crypto.randomUUID();
+
+  var res = await db.from('utilisateurs').insert([{
+    id: parentId,
+    nom: nom, prenom: prenom,
+    role: 'parent',
+    telephone: tel ? '+224' + tel : null,
+    ecole_id: ecoleId,
+    actif: true,
+    compte_active: true,
+    numero_matricule: mat,
+    email: emailInterne,
+    auth_id: authId,
+    mdp_temp: mdpTemp,
+    premiere_connexion: true
+  }]);
   if (res.error) { showModalErr(res.error.message); return; }
+
+  // Lier les enfants
+  var liens = enfantsSelectionnes.map(function(e) {
+    return { parent_id: parentId, eleve_id: e.id, lien: lien };
+  });
+  await db.from('parents_eleves').insert(liens);
+
   fermerModal();
-  alert('Parent ' + prenom + ' ' + nom + ' ajoute !\nMatricule: ' + mat);
+  enfantsSelectionnes = [];
+  alert('✅ Parent ' + prenom + ' ' + nom + ' ajoute avec ' + liens.length + ' enfant(s) !\n\n📋 IDENTIFIANTS DE CONNEXION :\n─────────────────────────\nMatricule : ' + mat + '\nMot de passe : ' + mdpTemp + '\n─────────────────────────\n⚠️ Donnez ces identifiants au parent.\nIl devra changer son mot de passe à la première connexion.');
   chargerParents();
 }
 var enfantsSelectionnes = [];
@@ -1626,20 +1758,41 @@ async function sauvegarderProf() {
   var tel = document.getElementById('m-tel').value.trim();
   var mat = document.getElementById('m-mat').value;
   if (!prenom || !nom) { showModalErr('Prenom et nom obligatoires.'); return; }
+
+  // Générer email interne et mot de passe temporaire
+  var emailInterne = genererEmail(mat, codeEcole);
+  var mdpTemp = genererMotDePasse(mat);
+
+  // Créer le compte Supabase Auth automatiquement
+  var authRes = await db.auth.admin ? 
+    { data: null, error: { message: 'Admin API non disponible' } } :
+    await fetch('https://rcojerlzguwqpclyudjo.supabase.co/auth/v1/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjb2plcmx6Z3V3cXBjbHl1ZGpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NTg1MzIsImV4cCI6MjA5MTAzNDUzMn0.4R_NOrYLdhkVMKw87Z33FLS9LoAUAgVj_Uk_RBCf8tg' },
+      body: JSON.stringify({ email: emailInterne, password: mdpTemp })
+    }).then(r => r.json());
+
+  var authId = authRes.user ? authRes.user.id : (authRes.id || null);
+
   var res = await db.from('utilisateurs').insert([{
-    id: crypto.randomUUID(),
+    id: authId || crypto.randomUUID(),
     nom: nom,
     prenom: prenom,
     role: 'professeur',
     telephone: tel ? '+224' + tel : null,
     ecole_id: ecoleId,
     actif: true,
-    compte_active: false,
-    numero_matricule: mat
+    compte_active: true,
+    numero_matricule: mat,
+    email: emailInterne,
+    auth_id: authId,
+    mdp_temp: mdpTemp,
+    premiere_connexion: true
   }]);
   if (res.error) { showModalErr(res.error.message); return; }
   fermerModal();
-  alert('Professeur ' + prenom + ' ' + nom + ' ajoute !\nMatricule: ' + mat + '\n\nDonnez ces informations au professeur :\n- Matricule : ' + mat + '\n- Code ecole : ' + codeEcole);
+  fermerModal();
+  alert('✅ Professeur ' + prenom + ' ' + nom + ' ajoute !\n\n📋 IDENTIFIANTS DE CONNEXION :\n─────────────────────────\nMatricule : ' + mat + '\nMot de passe : ' + mdpTemp + '\n─────────────────────────\n⚠️ Donnez ces identifiants au professeur.\nIl devra changer son mot de passe à la première connexion.');
   chargerProfesseurs();
 }
 
