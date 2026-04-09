@@ -251,12 +251,23 @@ let mesEnfants = [];
   if (demo.role === 'parent') {
     currentUser = { ...demo, demo: true };
     const { data: ecoles } = await db.from('ecoles').select('*').limit(1);
-    if (ecoles?.length) { ecoleId = ecoles[0].id; document.getElementById('school-name').textContent = ecoles[0].nom; }
+    if (ecoles?.length) {
+      ecoleId = ecoles[0].id;
+      document.getElementById('school-name').textContent = ecoles[0].nom;
+      // En mode demo, prendre le premier parent disponible
+      const { data: parents } = await db.from('utilisateurs').select('id').eq('ecole_id', ecoles[0].id).eq('role', 'parent').limit(1);
+      if (parents?.length) currentUser.id = parents[0].id;
+    }
   } else {
     try {
       const { data: { session } } = await db.auth.getSession();
       if (!session) { window.location.href = 'index.html'; return; }
-      const { data: u } = await db.from('utilisateurs').select('*, ecoles(*)').eq('id', session.user.id).maybeSingle();
+      // Chercher par id OU par auth_id
+      let { data: u } = await db.from('utilisateurs').select('*, ecoles(*)').eq('id', session.user.id).maybeSingle();
+      if (!u) {
+        const { data: u2 } = await db.from('utilisateurs').select('*, ecoles(*)').eq('auth_id', session.user.id).maybeSingle();
+        u = u2;
+      }
       if (!u || u.role !== 'parent') { window.location.href = 'index.html'; return; }
       currentUser = u; ecoleId = u.ecole_id;
       document.getElementById('school-name').textContent = u.ecoles?.nom || '';
@@ -269,6 +280,11 @@ let mesEnfants = [];
   document.getElementById('page-sub').textContent = `Bienvenue, ${prenom || nom}`;
   const piEmail = document.getElementById('pi-email-display');
   if (piEmail) piEmail.textContent = currentUser.email || '—';
+  // Charger les enfants du parent
+  if (currentUser.id && ecoleId) {
+    const { data: liens } = await db.from('parents_eleves').select('*, eleves(id, nom, prenom, numero_matricule, classes(nom, niveau))').eq('parent_id', currentUser.id);
+    mesEnfants = (liens||[]).map(function(l) { return l.eleves; }).filter(Boolean);
+  }
   await chargerDashboard();
 })();
 
@@ -382,29 +398,53 @@ async function chargerNotes() {
   document.getElementById('load-notes').style.display = 'block';
   document.getElementById('cont-notes').innerHTML = '';
   if (!ecoleId || mesEnfants.length === 0) {
-    document.getElementById('load-notes').innerHTML = '<div class="empty"><div class="empty-icon">📊</div>Aucune donnée disponible en mode démo.<br>Connectez-vous avec un vrai compte parent.</div>';
+    document.getElementById('load-notes').innerHTML = '<div class="empty"><div class="empty-icon">📊</div>Aucun enfant rattaché à votre compte.</div>';
     return;
   }
-  for (const enfant of mesEnfants) {
-    const { data: notes } = await db.from('notes').select('*, matieres(nom,coefficient)').eq('eleve_id', enfant.id).order('created_at',{ascending:false});
-    const moy = (notes||[]).length ? ((notes||[]).reduce((s,n)=>s+Number(n.valeur),0)/(notes||[]).length).toFixed(1) : '—';
-    document.getElementById('cont-notes').innerHTML += `
-      <div class="card">
-        <div class="card-title">${enfant.prenom} ${enfant.nom} — Moyenne : <span style="color:${moy>=10?'#3B6D11':'#A32D2D'}">${moy}/20</span></div>
-        <table>
-          <thead><tr><th>Matière</th><th>Note</th><th>Coef.</th><th>Appréciation</th></tr></thead>
-          <tbody>
-            ${(notes||[]).length === 0 ? '<tr><td colspan="4" style="text-align:center;color:#aaa;padding:16px">Aucune note pour l\'instant</td></tr>' :
-            (notes||[]).map(n => `<tr>
-              <td style="font-weight:500">${n.matieres?.nom||'—'}</td>
-              <td class="${Number(n.valeur)>=14?'note-high':Number(n.valeur)>=10?'note-mid':'note-low'}">${n.valeur}/20</td>
-              <td style="color:#888">${n.matieres?.coefficient||1}</td>
-              <td style="font-size:12px;color:#888">${n.appreciation||'—'}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>`;
+  var html = '';
+  for (var i = 0; i < mesEnfants.length; i++) {
+    var enfant = mesEnfants[i];
+    var resNotes = await db.from('notes').select('*, matieres(nom,coefficient)').eq('eleve_id', enfant.id).order('created_at', {ascending:false});
+    var notes = resNotes.data || [];
+    // Moyenne pondérée
+    var totalPoints = 0, totalCoef = 0;
+    notes.forEach(function(n) {
+      var c = n.matieres ? n.matieres.coefficient : 1;
+      totalPoints += Number(n.valeur) * c;
+      totalCoef += c;
+    });
+    var moy = totalCoef > 0 ? (totalPoints/totalCoef).toFixed(1) : '—';
+    var moyColor = moy >= 14 ? '#3B6D11' : moy >= 10 ? '#185FA5' : '#A32D2D';
+
+    // Comportement
+    var resComp = await db.from('comportements').select('*').eq('eleve_id', enfant.id).order('created_at', {ascending:false}).limit(1);
+    var comp = resComp.data && resComp.data.length > 0 ? resComp.data[0] : null;
+    var compHtml = comp
+      ? '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:8px;background:#f9f9f9;border-radius:6px"><span style="font-size:12px;color:#888">Comportement:</span><span style="color:#EF9F27">' + '★'.repeat(comp.note_comportement||0) + '☆'.repeat(5-(comp.note_comportement||0)) + '</span><span style="font-size:12px;color:#555">' + (comp.commentaire||'') + '</span></div>'
+      : '';
+
+    var lignesNotes = notes.length === 0
+      ? '<tr><td colspan="4" style="text-align:center;color:#aaa;padding:16px">Aucune note pour l\'instant</td></tr>'
+      : notes.map(function(n) {
+          var v = Number(n.valeur);
+          var cl = v>=14 ? 'note-high' : v>=10 ? 'note-mid' : 'note-low';
+          return '<tr><td style="font-weight:500">' + (n.matieres?n.matieres.nom:'—') + '</td><td class="' + cl + '">' + n.valeur + '/20</td><td style="color:#888">' + (n.matieres?n.matieres.coefficient:1) + '</td><td style="font-size:12px;color:#888">' + (n.appreciation||'—') + '</td><td style="font-size:11px;color:#aaa">' + (n.periode||'—') + '</td></tr>';
+        }).join('');
+
+    html += '<div class="card" style="margin-bottom:16px">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">' +
+        '<div style="display:flex;align-items:center;gap:12px">' +
+          '<div style="width:44px;height:44px;border-radius:50%;background:#E1F5EE;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#085041">' + (enfant.prenom[0]||'') + (enfant.nom[0]||'') + '</div>' +
+          '<div><div style="font-size:15px;font-weight:600">' + enfant.prenom + ' ' + enfant.nom + '</div>' +
+          '<div style="font-size:12px;color:#888">' + (enfant.classes?enfant.classes.nom:'—') + ' · ' + (enfant.numero_matricule||'—') + '</div></div>' +
+        '</div>' +
+        '<div style="text-align:right"><div style="font-size:11px;color:#888">Moyenne generale</div><div style="font-size:22px;font-weight:700;color:' + moyColor + '">' + moy + '/20</div></div>' +
+      '</div>' +
+      compHtml +
+      '<table style="margin-top:10px"><thead><tr><th>Matière</th><th>Note</th><th>Coef.</th><th>Appréciation</th><th>Période</th></tr></thead><tbody>' + lignesNotes + '</tbody></table>' +
+    '</div>';
   }
+  document.getElementById('cont-notes').innerHTML = html;
   document.getElementById('load-notes').style.display = 'none';
 }
 

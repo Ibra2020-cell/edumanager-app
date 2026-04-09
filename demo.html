@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"/><title>Démo locale</title></head>
+<body style="font-family:sans-serif;padding:40px;background:#f0f0eb">
+<h2>EduManager — Accès démo local</h2>
+<div style="display:flex;flex-direction:column;gap:10px;max-width:300px;margin-top:20px">
+  <button onclick="go('super_admin','Ibrahima Cissé')" style="padding:12px;background:#1a1a2e;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px">👑 Super Admin</button>
+  <button onclick="go('admin_ecole','Fatima Bangoura')" style="padding:12px;background:#0c2340;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px">🏫 Admin École</button>
+  <button onclick="go('professeur','Mamadou Diallo')" style="padding:12px;background:#1a0a2e;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px">👩‍🏫 Professeur</button>
+  <button onclick="go('parent','Aissatou Bah')" style="padding:12px;background:#0f3d2e;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px">👨‍👩‍👧 Parent</button>
+  <button onclick="go('eleve','Oumar Sow')" style="padding:12px;background:#2a1a00;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px">🎒 Élève</button>
+</div>
+<script>
+function go(role, nom) {
+  localStorage.setItem('edu_user', JSON.stringify({ role, nom, demo: true }));
+  const pages = { super_admin:'super-admin.html', admin_ecole:'admin-ecole.html', professeur:'professeur.html', parent:'parent.html', eleve:'eleve.html' };
+  window.location.href = pages[role];
+}
+</script>
+</body>
+</html>

@@ -199,7 +199,7 @@
           </div>
           <div id="load-parents" class="loading"><div class="spinner"></div>Chargement...</div>
           <table id="table-parents" style="display:none">
-            <thead><tr><th>Matricule</th><th>Parent</th><th>Telephone</th><th>Email</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Matricule</th><th>Parent & Enfants</th><th>Telephone</th><th>Email</th><th>Statut</th><th>Actions</th></tr></thead>
             <tbody id="tbody-parents"></tbody>
           </table>
         </div>
@@ -634,7 +634,7 @@ function afficherEleves(eleves) {
   } else {
     eleves.forEach(function(e, i) {
       var ini = ((e.prenom || ' ')[0] + (e.nom || ' ')[0]).toUpperCase();
-      html += '<tr><td><span class="mat-badge">' + (e.numero_matricule || '—') + '</span></td><td><div style="display:flex;align-items:center;gap:8px"><div class="ava" style="background:' + colors[i%5] + ';color:' + tcolors[i%5] + '">' + ini + '</div><div><div style="font-weight:500">' + e.prenom + ' ' + e.nom + '</div></div></div></td><td>' + (e.classes ? e.classes.nom : '—') + '</td><td style="color:#888;font-size:12px">' + (e.date_naissance ? new Date(e.date_naissance).toLocaleDateString('fr-FR') : '—') + '</td><td><span class="badge ' + (e.statut === 'actif' ? 'badge-ok' : 'badge-err') + '">' + e.statut + '</span></td><td><div style="display:flex;gap:4px"><button class="btn-sm btn-danger" onclick="supprimerEleve(\'' + e.id + '\',\'' + e.prenom + ' ' + e.nom + '\')">Supprimer</button></div></td></tr>';
+      html += '<tr><td><span class="mat-badge">' + (e.numero_matricule || '—') + '</span></td><td><div style="display:flex;align-items:center;gap:8px"><div class="ava" style="background:' + colors[i%5] + ';color:' + tcolors[i%5] + '">' + ini + '</div><div><div style="font-weight:500">' + e.prenom + ' ' + e.nom + '</div></div></div></td><td>' + (e.classes ? e.classes.nom : '—') + '</td><td style="color:#888;font-size:12px">' + (e.date_naissance ? new Date(e.date_naissance).toLocaleDateString('fr-FR') : '—') + '</td><td><span class="badge ' + (e.statut === 'actif' ? 'badge-ok' : 'badge-err') + '">' + e.statut + '</span></td><td><div style="display:flex;gap:4px"><button class="btn-sm" style="background:#E6F1FB;color:#0C447C;border-color:#ADD3F5" onclick="modifierEleve(\'' + e.id + '\')">Modifier</button><button class="btn-sm btn-danger" onclick="supprimerEleve(\'' + e.id + '\',\'' + e.prenom + ' ' + e.nom + '\')">Supprimer</button></div></td></tr>';
     });
   }
   document.getElementById('tbody-eleves').innerHTML = html;
@@ -647,7 +647,57 @@ function filtrerEleves() {
     return (!s || (e.prenom + ' ' + e.nom + ' ' + (e.numero_matricule || '')).toLowerCase().includes(s)) && (!c || e.classe_id === c);
   }));
 }
+async function modifierEleve(id) {
+  var eleve = tousEleves.find(function(e) { return e.id === id; });
+  if (!eleve) return;
+  if (toutesClasses.length === 0 && ecoleId) {
+    var rc = await db.from('classes').select('id,nom').eq('ecole_id', ecoleId).order('nom');
+    toutesClasses = rc.data || [];
+  }
+  var opts = '<option value="">Selectionner...</option>';
+  toutesClasses.forEach(function(c) {
+    opts += '<option value="' + c.id + '"' + (eleve.classe_id === c.id ? ' selected' : '') + '>' + c.nom + '</option>';
+  });
+  document.getElementById('modal-content').innerHTML =
+    '<div class="modal-title">Modifier un eleve</div>' +
+    '<div class="alert alert-err" id="m-err"></div>' +
+    '<div style="background:#f9f9f9;border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:12px;color:#888">Matricule : <strong>' + (eleve.numero_matricule||'—') + '</strong></div>' +
+    '<div class="field-grid">' +
+      '<div class="field"><label>Prenom *</label><input id="m-prenom" type="text" value="' + (eleve.prenom||'') + '"/></div>' +
+      '<div class="field"><label>Nom *</label><input id="m-nom" type="text" value="' + (eleve.nom||'') + '"/></div>' +
+    '</div>' +
+    '<div class="field-grid">' +
+      '<div class="field"><label>Date de naissance</label><input id="m-ddn" type="date" value="' + (eleve.date_naissance||'') + '"/></div>' +
+      '<div class="field"><label>Sexe</label><select id="m-sexe"><option value="M"' + (eleve.sexe==='M'?' selected':'') + '>Masculin</option><option value="F"' + (eleve.sexe==='F'?' selected':'') + '>Feminin</option></select></div>' +
+    '</div>' +
+    '<div class="field"><label>Classe</label><select id="m-classe">' + opts + '</select></div>' +
+    '<div class="field"><label>Statut</label><select id="m-statut"><option value="actif"' + (eleve.statut==='actif'?' selected':'') + '>Actif</option><option value="inactif"' + (eleve.statut==='inactif'?' selected':'') + '>Inactif</option><option value="exclu"' + (eleve.statut==='exclu'?' selected':'') + '>Exclu</option></select></div>' +
+    '<div class="modal-actions">' +
+      '<button class="btn" onclick="fermerModal()">Annuler</button>' +
+      '<button class="btn btn-primary" onclick="sauvegarderModifEleve(\'' + id + '\')">Enregistrer</button>' +
+    '</div>';
+  document.getElementById('modal-bg').classList.add('open');
+}
 
+async function sauvegarderModifEleve(id) {
+  var prenom = document.getElementById('m-prenom').value.trim();
+  var nom = document.getElementById('m-nom').value.trim();
+  var classeId = document.getElementById('m-classe').value;
+  var ddn = document.getElementById('m-ddn').value;
+  var sexe = document.getElementById('m-sexe').value;
+  var statut = document.getElementById('m-statut').value;
+  if (!prenom||!nom) { showModalErr('Prenom et nom obligatoires.'); return; }
+  var res = await db.from('eleves').update({
+    prenom: prenom, nom: nom,
+    classe_id: classeId || null,
+    date_naissance: ddn || null,
+    sexe: sexe, statut: statut
+  }).eq('id', id);
+  if (res.error) { showModalErr(res.error.message); return; }
+  fermerModal();
+  alert('Eleve modifie avec succes !');
+  chargerEleves();
+}
 async function supprimerEleve(id, nom) {
   if (!confirm('Supprimer ' + nom + ' ?')) return;
   await db.from('eleves').delete().eq('id', id);
@@ -666,15 +716,36 @@ async function chargerParents() {
   document.getElementById('table-parents').style.display = 'table';
 }
 
-function afficherParents(parents) {
+async function afficherParents(parents) {
   var html = '';
   if (parents.length === 0) {
-    html = '<tr><td colspan="5" style="text-align:center;padding:24px;color:#aaa">Aucun parent enregistre</td></tr>';
+    html = '<tr><td colspan="6" style="text-align:center;padding:24px;color:#aaa">Aucun parent enregistre</td></tr>';
   } else {
-    parents.forEach(function(p) {
+    for (var i = 0; i < parents.length; i++) {
+      var p = parents[i];
       var ini = ((p.prenom || ' ')[0] + p.nom[0]).toUpperCase();
-      html += '<tr><td><span class="mat-badge">' + (p.numero_matricule || '—') + '</span></td><td><div style="display:flex;align-items:center;gap:8px"><div class="ava" style="background:#E1F5EE;color:#085041">' + ini + '</div><div style="font-weight:500">' + (p.prenom || '') + ' ' + p.nom + '</div></div></td><td style="font-size:12px;color:#888">' + (p.telephone || '—') + '</td><td style="font-size:12px;color:#888">' + p.email + '</td><td><button class="btn-sm btn-danger" onclick="supprimerParent(\'' + p.id + '\',\'' + p.nom + '\')">Supprimer</button></td></tr>';
-    });
+      // Charger les enfants de ce parent
+      var resEnf = await db.from('parents_eleves').select('*, eleves(nom,prenom,numero_matricule,classes(nom))').eq('parent_id', p.id);
+      var enfants = (resEnf.data||[]).map(function(l) { return l.eleves; }).filter(Boolean);
+      var enfantsHtml = enfants.length === 0
+        ? '<span style="color:#aaa;font-size:11px">Aucun enfant rattache</span>'
+        : enfants.map(function(e) {
+            return '<span style="display:inline-block;background:#E6F1FB;color:#0C447C;border-radius:4px;padding:2px 6px;font-size:10px;margin:1px">' + e.prenom + ' ' + e.nom + ' · ' + (e.classes?e.classes.nom:'—') + '</span>';
+          }).join('');
+      html += '<tr>' +
+        '<td><span class="mat-badge">' + (p.numero_matricule||'—') + '</span></td>' +
+        '<td><div style="display:flex;align-items:center;gap:8px"><div class="ava" style="background:#E1F5EE;color:#085041">' + ini + '</div>' +
+        '<div><div style="font-weight:500">' + (p.prenom||'') + ' ' + p.nom + '</div>' +
+        '<div style="margin-top:3px">' + enfantsHtml + '</div></div></div></td>' +
+        '<td style="font-size:12px;color:#888">' + (p.telephone||'—') + '</td>' +
+        '<td style="font-size:12px;color:#888">' + (p.email||'—') + '</td>' +
+        '<td><span class="badge ' + (p.compte_active?'badge-ok':'badge-warn') + '">' + (p.compte_active?'Actif':'En attente') + '</span></td>' +
+        '<td><div style="display:flex;gap:4px">' +
+          '<button class="btn-sm" style="background:#E6F1FB;color:#0C447C;border-color:#ADD3F5" onclick="modifierParent(\'' + p.id + '\')">Modifier</button>' +
+          '<button class="btn-sm btn-danger" onclick="supprimerParent(\'' + p.id + '\',\'' + p.nom + '\')">Supprimer</button>' +
+        '</div></td>' +
+      '</tr>';
+    }
   }
   document.getElementById('tbody-parents').innerHTML = html;
 }
@@ -685,7 +756,59 @@ function filtrerParents() {
     return ((p.prenom || '') + ' ' + p.nom + ' ' + (p.numero_matricule || '')).toLowerCase().includes(s);
   }));
 }
+async function modifierParent(id) {
+  var parent = tousParents.find(function(p) { return p.id === id; });
+  if (!parent) return;
+  var resEnf = await db.from('parents_eleves').select('*, eleves(id,nom,prenom,numero_matricule,classes(nom))').eq('parent_id', id);
+  var enfants = (resEnf.data||[]).map(function(l) { return l.eleves; }).filter(Boolean);
+  var enfantsHtml = enfants.length === 0
+    ? '<div style="color:#aaa;font-size:12px">Aucun enfant rattache</div>'
+    : enfants.map(function(e) {
+        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:#f9f9f9;border-radius:4px;margin-bottom:3px">' +
+          '<span style="font-size:12px"><strong>' + e.prenom + ' ' + e.nom + '</strong> · ' + (e.classes?e.classes.nom:'—') + ' · ' + (e.numero_matricule||'—') + '</span>' +
+          '<button onclick="retirerEnfantParent(\'' + id + '\',\'' + e.id + '\')" style="padding:2px 8px;background:#FCEBEB;color:#791F1F;border:1px solid #F09595;border-radius:4px;cursor:pointer;font-size:11px">✕</button>' +
+        '</div>';
+      }).join('');
+  document.getElementById('modal-content').innerHTML =
+    '<div class="modal-title">Modifier un parent</div>' +
+    '<div class="alert alert-err" id="m-err"></div>' +
+    '<div style="background:#f9f9f9;border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:12px;color:#888">Matricule : <strong>' + (parent.numero_matricule||'—') + '</strong></div>' +
+    '<div class="field-grid">' +
+      '<div class="field"><label>Prenom *</label><input id="m-prenom" type="text" value="' + (parent.prenom||'') + '"/></div>' +
+      '<div class="field"><label>Nom *</label><input id="m-nom" type="text" value="' + (parent.nom||'') + '"/></div>' +
+    '</div>' +
+    '<div class="field"><label>Telephone (+224)</label><input id="m-tel" type="tel" value="' + (parent.telephone||'') + '"/></div>' +
+    '<div style="margin-bottom:12px">' +
+      '<div style="font-size:12px;color:#888;font-weight:500;margin-bottom:6px">Enfants rattaches :</div>' +
+      '<div id="liste-enfants-parent">' + enfantsHtml + '</div>' +
+    '</div>' +
+    '<div class="modal-actions">' +
+      '<button class="btn" onclick="fermerModal()">Annuler</button>' +
+      '<button class="btn btn-primary" onclick="sauvegarderModifParent(\'' + id + '\')">Enregistrer</button>' +
+    '</div>';
+  document.getElementById('modal-bg').classList.add('open');
+}
 
+async function retirerEnfantParent(parentId, eleveId) {
+  if (!confirm('Retirer cet enfant du parent ?')) return;
+  await db.from('parents_eleves').delete().eq('parent_id', parentId).eq('eleve_id', eleveId);
+  await modifierParent(parentId);
+}
+
+async function sauvegarderModifParent(id) {
+  var prenom = document.getElementById('m-prenom').value.trim();
+  var nom = document.getElementById('m-nom').value.trim();
+  var tel = document.getElementById('m-tel').value.trim();
+  if (!prenom||!nom) { showModalErr('Prenom et nom obligatoires.'); return; }
+  var res = await db.from('utilisateurs').update({
+    prenom: prenom, nom: nom,
+    telephone: tel || null
+  }).eq('id', id);
+  if (res.error) { showModalErr(res.error.message); return; }
+  fermerModal();
+  alert('Parent modifie avec succes !');
+  chargerParents();
+}
 async function supprimerParent(id, nom) {
   if (!confirm('Supprimer le parent ' + nom + ' ?')) return;
   await db.from('utilisateurs').delete().eq('id', id);
@@ -777,7 +900,7 @@ function afficherProfs(profs) {
       var ini = ((p.prenom || ' ')[0] + p.nom[0]).toUpperCase();
       var coursProf = tousCoursAssignes.filter(function(c) { return c.professeur_id === p.id; });
 var coursHtml = coursProf.length === 0 ? '<span style="color:#aaa;font-size:11px">Non assigne</span>' : coursProf.map(function(c) { return '<span style="display:inline-block;background:#E6F1FB;color:#0C447C;border-radius:4px;padding:2px 6px;font-size:10px;margin:1px">' + (c.matieres ? c.matieres.nom : '') + ' - ' + (c.classes ? c.classes.nom : '') + '</span>'; }).join('');
-html += '<tr><td><span class="mat-badge">' + (p.numero_matricule || '—') + '</span></td><td><div style="display:flex;align-items:center;gap:8px"><div class="ava" style="background:#E1F5EE;color:#085041">' + ini + '</div><div><div style="font-weight:500">' + (p.prenom || '') + ' ' + p.nom + '</div><div style="margin-top:3px">' + coursHtml + '</div></div></div></td><td style="font-size:12px;color:#888">' + (p.telephone || '—') + '</td><td style="font-size:12px;color:#888">' + p.email + '</td><td><span class="badge ' + (p.actif ? 'badge-ok' : 'badge-err') + '">' + (p.actif ? 'Actif' : 'Inactif') + '</span></td><td><div style="display:flex;gap:4px"><button class="btn-sm" style="background:#E6F1FB;color:#0C447C;border-color:#ADD3F5" onclick="assignerCours(\'' + p.id + '\',\'' + p.prenom + ' ' + p.nom + '\')">Assigner</button><button class="btn-sm btn-danger" onclick="supprimerProf(\'' + p.id + '\',\'' + p.nom + '\')">Supprimer</button></div></td></tr>';
+html += '<tr><td><span class="mat-badge">' + (p.numero_matricule || '—') + '</span></td><td><div style="display:flex;align-items:center;gap:8px"><div class="ava" style="background:#E1F5EE;color:#085041">' + ini + '</div><div><div style="font-weight:500">' + (p.prenom || '') + ' ' + p.nom + '</div><div style="margin-top:3px">' + coursHtml + '</div></div></div></td><td style="font-size:12px;color:#888">' + (p.telephone || '—') + '</td><td style="font-size:12px;color:#888">' + p.email + '</td><td><span class="badge ' + (p.actif ? 'badge-ok' : 'badge-err') + '">' + (p.actif ? 'Actif' : 'Inactif') + '</span></td><td><div style="display:flex;gap:4px"><button class="btn-sm" style="background:#E6F1FB;color:#0C447C;border-color:#ADD3F5" onclick="modifierProf(\'' + p.id + '\')">Modifier</button><button class="btn-sm" style="background:#E6F1FB;color:#0C447C;border-color:#ADD3F5" onclick="assignerCours(\'' + p.id + '\',\'' + p.prenom + ' ' + p.nom + '\')">Assigner</button><button class="btn-sm btn-danger" onclick="supprimerProf(\'' + p.id + '\',\'' + p.nom + '\')">Supprimer</button></div></td></tr>';
     });
   }
   document.getElementById('tbody-profs').innerHTML = html;
@@ -818,6 +941,42 @@ async function supprimerCours(coursId, profId, profNom) {
   if (!confirm('Supprimer ce cours ?')) return;
   await db.from('cours_assignes').delete().eq('id', coursId);
   await assignerCours(profId, profNom);
+}
+async function modifierProf(id) {
+  var prof = tousProfs.find(function(p) { return p.id === id; });
+  if (!prof) return;
+  document.getElementById('modal-content').innerHTML =
+    '<div class="modal-title">Modifier un professeur</div>' +
+    '<div class="alert alert-err" id="m-err"></div>' +
+    '<div style="background:#f9f9f9;border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:12px;color:#888">Matricule : <strong>' + (prof.numero_matricule||'—') + '</strong></div>' +
+    '<div class="field-grid">' +
+      '<div class="field"><label>Prenom *</label><input id="m-prenom" type="text" value="' + (prof.prenom||'') + '"/></div>' +
+      '<div class="field"><label>Nom *</label><input id="m-nom" type="text" value="' + (prof.nom||'') + '"/></div>' +
+    '</div>' +
+    '<div class="field"><label>Telephone (+224)</label><input id="m-tel" type="tel" value="' + (prof.telephone||'') + '"/></div>' +
+    '<div class="field"><label>Statut</label><select id="m-actif"><option value="true"' + (prof.actif?' selected':'') + '>Actif</option><option value="false"' + (!prof.actif?' selected':'') + '>Inactif</option></select></div>' +
+    '<div class="modal-actions">' +
+      '<button class="btn" onclick="fermerModal()">Annuler</button>' +
+      '<button class="btn btn-primary" onclick="sauvegarderModifProf(\'' + id + '\')">Enregistrer</button>' +
+    '</div>';
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+async function sauvegarderModifProf(id) {
+  var prenom = document.getElementById('m-prenom').value.trim();
+  var nom = document.getElementById('m-nom').value.trim();
+  var tel = document.getElementById('m-tel').value.trim();
+  var actif = document.getElementById('m-actif').value === 'true';
+  if (!prenom||!nom) { showModalErr('Prenom et nom obligatoires.'); return; }
+  var res = await db.from('utilisateurs').update({
+    prenom: prenom, nom: nom,
+    telephone: tel || null,
+    actif: actif
+  }).eq('id', id);
+  if (res.error) { showModalErr(res.error.message); return; }
+  fermerModal();
+  alert('Professeur modifie avec succes !');
+  chargerProfesseurs();
 }
 async function supprimerProf(id, nom) {
   if (!confirm('Supprimer le professeur ' + nom + ' ?')) return;
