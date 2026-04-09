@@ -165,7 +165,11 @@ const ROLES = {
       }
       if (u?.role) {
         localStorage.setItem('edu_user', JSON.stringify({ role: u.role, nom: u.nom, prenom: u.prenom, email: session.user.email }));
-        window.location.href = ROLES[u.role] || 'index.html';
+        if (u.premiere_connexion) {
+          window.location.href = 'changer-mdp.html';
+        } else {
+          window.location.href = ROLES[u.role] || 'index.html';
+        }
       }
     }
   } catch(e) { console.log('Pas de session active'); }
@@ -299,7 +303,12 @@ async function doLogin() {
       ecole_id: u.ecole_id, email, demo: false
     }));
 
-    window.location.href = ROLES[u.role] || 'index.html';
+    // Vérifier si première connexion
+    if (u.premiere_connexion) {
+      window.location.href = 'changer-mdp.html';
+    } else {
+      window.location.href = ROLES[u.role] || 'index.html';
+    }
 
   } catch(e) {
     showErr('err-login', e.message === 'Invalid login credentials'

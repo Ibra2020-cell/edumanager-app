@@ -436,9 +436,11 @@ function genererEmail(matricule, code) {
 }
 
 function genererMotDePasse(matricule) {
-  var sec = new Date().getSeconds().toString().padStart(2,'0');
   var lettres = matricule.replace(/-/g, '').substring(0,3).toUpperCase();
-  return sec + lettres + '!';
+  var chiffres = Math.floor(1000 + Math.random() * 9000); // 4 chiffres aléatoires
+  var symboles = ['@','#','$','!','%','&'][Math.floor(Math.random()*6)];
+  var minuscule = matricule.replace(/-/g, '').substring(3,5).toLowerCase();
+  return lettres + chiffres + symboles + minuscule; // ex: PRF4521@ld → 10 caractères
 }
 async function prochainEleve() {
   var res = await db.from('eleves').select('id', { count: 'exact' }).eq('ecole_id', ecoleId || '00000000-0000-0000-0000-000000000000');
