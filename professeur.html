@@ -696,8 +696,37 @@ async function enregistrerAppel() {
     justifiee: false, sms_envoye: false
   }));
 
-  await db.from('absences').insert(insertions);
-  alert(`✅ Appel enregistré ! ${absents.length} absence(s) signalée(s).\n📱 Les parents seront notifiés.`);
+  var resAbs = await db.from('absences').insert(insertions).select();
+  
+  // Créer notifications pour les parents
+  if (resAbs.data && resAbs.data.length > 0) {
+    for (var i = 0; i < resAbs.data.length; i++) {
+      var absence = resAbs.data[i];
+      // Trouver le parent de cet élève
+      var resParent = await db.from('parents_eleves')
+        .select('parent_id, eleves(nom,prenom)')
+        .eq('eleve_id', absence.eleve_id);
+      
+      if (resParent.data && resParent.data.length > 0) {
+        var eleve = resParent.data[0].eleves;
+        var notifications = resParent.data.map(function(lien) {
+          return {
+            ecole_id: ecoleId,
+            destinataire_id: lien.parent_id,
+            titre: 'Absence signalée',
+            message: 'Votre enfant ' + (eleve ? eleve.prenom + ' ' + eleve.nom : '') + 
+                     ' était absent(e) le ' + new Date(absence.date_absence).toLocaleDateString('fr-FR') + 
+                     ' (' + absence.periode + ') — Non justifiée.',
+            type: 'absence',
+            lu: false
+          };
+        });
+        await db.from('notifications').insert(notifications);
+      }
+    }
+  }
+  
+  alert('Appel enregistre ! ' + absents.length + ' absence(s) signalee(s). Les parents ont ete notifies.');
 }
 
 // ============================================

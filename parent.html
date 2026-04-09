@@ -329,6 +329,44 @@ async function chargerDashboard() {
       const totalAbs = absResults.reduce((s,r) => s+(r.count||0), 0);
       document.getElementById('d-absences').textContent = totalAbs;
 
+      // Notifications non lues
+      if (currentUser?.id) {
+        const { data: notifs } = await db.from('notifications')
+          .select('*')
+          .eq('destinataire_id', currentUser.id)
+          .eq('lu', false)
+          .order('created_at', {ascending: false});
+        
+        if (notifs && notifs.length > 0) {
+          // Afficher bannière de notifications
+          var notifHtml = '<div style="background:#FCEBEB;border:1px solid #F09595;border-radius:10px;padding:14px;margin-bottom:16px">' +
+            '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+              '<div style="font-size:14px;font-weight:600;color:#791F1F">🔔 ' + notifs.length + ' nouvelle(s) notification(s)</div>' +
+              '<button onclick="marquerToutLu()" style="padding:4px 10px;background:#E24B4A;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11px">Tout marquer lu</button>' +
+            '</div>' +
+            notifs.map(function(n) {
+              return '<div style="display:flex;align-items:flex-start;justify-content:space-between;padding:8px;background:#fff;border-radius:6px;margin-bottom:4px">' +
+                '<div>' +
+                  '<div style="font-size:12px;font-weight:600;color:#791F1F">' + n.titre + '</div>' +
+                  '<div style="font-size:12px;color:#555;margin-top:2px">' + n.message + '</div>' +
+                  '<div style="font-size:10px;color:#aaa;margin-top:2px">' + new Date(n.created_at).toLocaleDateString('fr-FR') + '</div>' +
+                '</div>' +
+                '<button onclick="marquerLu(\'' + n.id + '\')" style="padding:3px 8px;background:#FCEBEB;color:#791F1F;border:1px solid #F09595;border-radius:4px;cursor:pointer;font-size:10px;flex-shrink:0;margin-left:8px">Lu</button>' +
+              '</div>';
+            }).join('') +
+          '</div>';
+          
+          // Insérer avant les cartes enfants
+          var contDash = document.getElementById('cont-dash');
+          var existing = document.getElementById('notif-banner');
+          if (existing) existing.remove();
+          var div = document.createElement('div');
+          div.id = 'notif-banner';
+          div.innerHTML = notifHtml;
+          contDash.insertBefore(div, contDash.firstChild);
+        }
+      }
+
       // Annonces
       const { count: nbAnn } = await db.from('annonces').select('id',{count:'exact'}).eq('ecole_id', ecoleId);
       document.getElementById('d-annonces').textContent = nbAnn || 0;
@@ -369,7 +407,17 @@ async function chargerDashboard() {
     document.getElementById('load-dash').innerHTML = `<div style="color:#A32D2D;text-align:center;padding:20px">Erreur : ${e.message}</div>`;
   }
 }
+async function marquerLu(notifId) {
+  await db.from('notifications').update({ lu: true }).eq('id', notifId);
+  await chargerDashboard();
+}
 
+async function marquerToutLu() {
+  if (!currentUser?.id) return;
+  await db.from('notifications').update({ lu: true }).eq('destinataire_id', currentUser.id).eq('lu', false);
+  var banner = document.getElementById('notif-banner');
+  if (banner) banner.remove();
+}
 async function chargerEnfants() {
   document.getElementById('load-enfants').style.display = 'block';
   document.getElementById('cont-enfants').innerHTML = '';
