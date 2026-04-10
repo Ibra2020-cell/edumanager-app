@@ -69,6 +69,18 @@
     .field { margin-bottom: 12px; }
     .field label { font-size: 12px; color: #888; display: block; margin-bottom: 4px; }
     .field input, .field select, .field textarea { width: 100%; padding: 9px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; font-family: inherit; outline: none; }
+  .hamburger { display:none; background:none; border:none; cursor:pointer; font-size:24px; padding:4px 8px; }
+
+@media (max-width: 768px) {
+  .sidebar { position:fixed; left:-260px; top:0; height:100%; z-index:200; transition:left 0.3s; box-shadow:2px 0 16px rgba(0,0,0,0.15); }
+  .sidebar.open { left:0; }
+  .sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:199; }
+  .sidebar-overlay.open { display:block; }
+  #menu-toggle { display:inline-block !important; }
+  .main { margin-left:0 !important; }
+  .topbar { display:flex; align-items:center; }
+  #onglets-enfants { padding:8px 12px; }
+}
   </style>
 </head>
 <body>
@@ -86,9 +98,9 @@
       <div class="nav-item" onclick="showPage('notes',this)"><span class="nav-icon">📊</span> Notes & moyennes</div>
       <div class="nav-item" onclick="showPage('absences',this)"><span class="nav-icon">📌</span> Absences</div>
       <div class="nav-item" onclick="showPage('bulletins',this)"><span class="nav-icon">📄</span> Bulletins</div>
+      <div class="nav-item" onclick="showPage('devoirs',this)"><span class="nav-icon">📝</span> Devoirs</div>
       <div class="nav-section">Communication</div>
       <div class="nav-item" onclick="showPage('annonces',this)"><span class="nav-icon">📢</span> Annonces école</div>
-      <div class="nav-item" onclick="showPage('messagerie',this)"><span class="nav-icon">✉️</span> Messagerie</div>
       <div class="nav-section">Inscription</div>
       <div class="nav-item" onclick="showPage('preinscription',this)"><span class="nav-icon">📋</span> Pré-inscription</div>
       <div class="nav-item" onclick="showPage('signalement',this)"><span class="nav-icon">🚨</span> Signalement</div>
@@ -106,12 +118,15 @@
   <div class="main">
     <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
     <div class="topbar">
-      <div>
+      <button id="menu-toggle" onclick="toggleSidebar()" style="display:none;background:none;border:none;cursor:pointer;font-size:22px;padding:4px 8px;margin-right:8px">☰</button>
+      <div style="flex:1">
         <div class="topbar-title" id="page-title">Accueil</div>
         <div class="topbar-sub" id="page-sub">Bienvenue</div>
       </div>
-      <button class="btn btn-primary" onclick="showPage('messagerie',null)">✉️ Contacter l'école</button>
     </div>
+
+    <!-- ONGLETS ENFANTS -->
+    <div id="onglets-enfants" style="display:flex;gap:8px;padding:12px 24px;overflow-x:auto;background:#fff;border-bottom:1px solid #eee;flex-wrap:nowrap;-webkit-overflow-scrolling:touch"></div>
 
     <div class="content">
 
@@ -165,6 +180,12 @@
         <div id="cont-bulletins"></div>
       </div>
 
+      <!-- DEVOIRS -->
+      <div class="page" id="page-devoirs">
+        <div id="load-devoirs-parent" class="loading"><div class="spinner"></div>Chargement...</div>
+        <div id="cont-devoirs-parent"></div>
+      </div>
+
       <!-- ANNONCES -->
       <div class="page" id="page-annonces">
         <div id="load-annonces" class="loading"><div class="spinner"></div>Chargement...</div>
@@ -188,34 +209,51 @@
 
       <!-- PRÉ-INSCRIPTION -->
       <div class="page" id="page-preinscription">
+        <div style="background:#E6F1FB;border-radius:10px;padding:14px 16px;margin-bottom:16px;border-left:3px solid #185FA5">
+          <div style="font-size:13px;font-weight:700;color:#0C447C;margin-bottom:4px">ℹ️ Ré-inscription uniquement</div>
+          <div style="font-size:12px;color:#185FA5">Cette section permet uniquement de faire une demande de ré-inscription pour un enfant <strong>déjà inscrit</strong> dans l'école. Pour une première inscription, contactez directement l'établissement.</div>
+        </div>
         <div class="card" style="max-width:520px">
-          <div class="card-title">Formulaire de pré-inscription</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div class="field"><label>Prénom *</label><input type="text" id="pi-prenom" placeholder="Mamadou"/></div>
-            <div class="field"><label>Nom *</label><input type="text" id="pi-nom" placeholder="Diallo"/></div>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div class="field"><label>Date de naissance</label><input type="date" id="pi-ddn"/></div>
-            <div class="field"><label>Sexe</label><select id="pi-sexe" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff"><option value="M">Masculin</option><option value="F">Féminin</option></select></div>
-          </div>
-          <div class="field"><label>Classe souhaitée</label>
-            <select id="pi-classe" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff">
-              <option>1ère année</option><option>2ème année</option><option>3ème année</option>
-              <option>4ème année</option><option>5ème année</option><option>6ème année</option>
-              <option>7ème année</option><option>8ème année</option><option>9ème année</option>
-              <option>10ème année</option><option>11ème année</option><option>12ème année</option>
-              <option>Terminale</option>
+          <div class="card-title">📋 Demande de ré-inscription</div>
+          <div id="err-preinsc" style="background:#FCEBEB;color:#791F1F;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;display:none;border-left:3px solid #E24B4A"></div>
+          <div id="ok-preinsc" style="background:#EAF3DE;color:#3B6D11;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;display:none;border-left:3px solid #1D9E75"></div>
+
+          <div class="field">
+            <label>Sélectionner l'enfant ✱</label>
+            <select id="pi-enfant" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff" onchange="remplirInfosEnfant()">
+              <option value="">— Choisir un enfant —</option>
             </select>
+            <div style="font-size:11px;color:#aaa;margin-top:3px">Uniquement vos enfants déjà inscrits dans l'école</div>
           </div>
-          <div class="field"><label>Code de l'établissement *</label>
-            <input type="text" id="pi-code" placeholder="Ex: LD-2026-642" style="text-transform:uppercase"/>
-            <div style="font-size:11px;color:#aaa;margin-top:3px">Fourni par l'école</div>
+
+          <div id="infos-enfant-preinsc" style="display:none">
+            <div style="background:#f9f9f9;border-radius:8px;padding:12px;margin-bottom:14px">
+              <div style="font-size:12px;color:#888;margin-bottom:6px;font-weight:600">Informations actuelles :</div>
+              <div style="font-size:13px" id="detail-enfant-preinsc"></div>
+            </div>
+            <div class="field">
+              <label>Classe souhaitée pour l'année prochaine ✱</label>
+              <select id="pi-classe" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff">
+                <option value="">Sélectionner...</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Message / remarques</label>
+              <textarea id="pi-message" placeholder="Informations complémentaires pour l'école..." style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;height:80px;resize:vertical;font-family:inherit"></textarea>
+            </div>
+            <div style="background:#FFF8E6;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#7A5200">
+              ⚠️ Cette demande sera examinée par le directeur de l'école. Vous serez contacté pour confirmation.
+            </div>
+            <button class="btn btn-primary" style="width:100%" onclick="soumettrePreinscription()">📤 Soumettre la demande</button>
           </div>
-          <div class="field"><label>Votre téléphone (+224)</label><input type="tel" id="pi-tel" placeholder="620 000 000"/></div>
-          <div style="background:#f9f9f9;border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px;color:#888">
-            Votre email : <strong id="pi-email-display">—</strong> (email de connexion)
+        </div>
+
+        <div class="card" style="max-width:520px;margin-top:16px;border:1px dashed #ddd;background:#fafafa">
+          <div style="text-align:center;padding:8px">
+            <div style="font-size:24px;margin-bottom:8px">📞</div>
+            <div style="font-size:14px;font-weight:600;margin-bottom:4px">Première inscription ?</div>
+            <div style="font-size:12px;color:#888">Contactez directement votre école pour inscrire un nouvel élève. Le directeur créera son compte et vous fournira ses identifiants.</div>
           </div>
-          <button class="btn btn-primary" style="width:100%" onclick="soumettrePreinscription()">Soumettre la demande</button>
         </div>
       </div>
 
@@ -249,29 +287,37 @@ let ecoleId = null;
 let mesEnfants = [];
 
 (async () => {
-  const demo = JSON.parse(localStorage.getItem('edu_user') || '{}');
-  if (demo.role === 'parent') {
-    currentUser = { ...demo, demo: true };
-    const { data: ecoles } = await db.from('ecoles').select('*').limit(1);
-    if (ecoles?.length) { ecoleId = ecoles[0].id; document.getElementById('school-name').textContent = ecoles[0].nom; }
-  } else {
-    try {
-      const { data: { session } } = await db.auth.getSession();
-      if (!session) { window.location.href = 'index.html'; return; }
-      const { data: u } = await db.from('utilisateurs').select('*, ecoles(*)').eq('id', session.user.id).maybeSingle();
-      if (!u || u.role !== 'parent') { window.location.href = 'index.html'; return; }
-      currentUser = u; ecoleId = u.ecole_id;
-      document.getElementById('school-name').textContent = u.ecoles?.nom || '';
-    } catch(e) { window.location.href = 'index.html'; return; }
-  }
-  const nom = currentUser.nom || 'Parent';
-  const prenom = currentUser.prenom || '';
-  document.getElementById('user-name').textContent = `${prenom} ${nom}`.trim();
-  document.getElementById('user-initials').textContent = `${prenom[0]||''}${nom[0]||''}`.toUpperCase();
-  document.getElementById('page-sub').textContent = `Bienvenue, ${prenom || nom}`;
-  const piEmail = document.getElementById('pi-email-display');
-  if (piEmail) piEmail.textContent = currentUser.email || '—';
-  await chargerDashboard();
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    if (!session) { window.location.href = 'index.html'; return; }
+
+    const { data: u } = await db.from('utilisateurs').select('*, ecoles(*)').eq('id', session.user.id).maybeSingle();
+    if (!u || u.role !== 'parent') { window.location.href = 'index.html'; return; }
+
+    // Première connexion → rediriger
+    if (u.premiere_connexion) {
+      await db.auth.signOut();
+      window.location.href = 'index.html?tab=premiere';
+      return;
+    }
+
+    currentUser = u; ecoleId = u.ecole_id;
+    document.getElementById('school-name').textContent = u.ecoles?.nom || '';
+    document.getElementById('user-name').textContent = (u.prenom||'') + ' ' + u.nom;
+    document.getElementById('user-initials').textContent = ((u.prenom?.[0]||'') + (u.nom?.[0]||'')).toUpperCase();
+    document.getElementById('page-sub').textContent = 'Bienvenue, ' + (u.prenom || u.nom);
+
+    // Charger les enfants du parent
+    var { data: liens } = await db.from('parents_eleves')
+      .select('eleve_id, eleves(id, nom, prenom, classe_id, classes(nom), numero_matricule, telephone)')
+      .eq('parent_id', u.id);
+    mesEnfants = (liens||[]).map(function(l) { return l.eleves; }).filter(Boolean);
+
+    // Afficher onglets enfants
+    afficherOngletsEnfants();
+
+    await chargerDashboard();
+  } catch(e) { window.location.href = 'index.html'; return; }
 })();
 
 const pageMeta = {
@@ -286,7 +332,58 @@ const pageMeta = {
   signalement:   ['Signalement anonyme', 'Harcèlement — strictement confidentiel'],
 };
 
+var enfantActifId = null;
+
+function afficherOngletsEnfants() {
+  var cont = document.getElementById('onglets-enfants');
+  if (!cont) return;
+  if (mesEnfants.length === 0) {
+    cont.innerHTML = '<div style="font-size:12px;color:#aaa;padding:8px">Aucun enfant rattaché</div>';
+    return;
+  }
+  cont.innerHTML = mesEnfants.map(function(e, i) {
+    return '<button onclick="selectionnerEnfant(\'' + e.id + '\')" id="onglet-' + e.id + '" style="padding:6px 14px;border-radius:20px;border:1px solid #ddd;background:' + (i===0?'#185FA5':'#fff') + ';color:' + (i===0?'#fff':'#555') + ';font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">' +
+      (e.prenom||'') + ' ' + e.nom +
+      '<span style="font-size:10px;margin-left:4px;opacity:0.7">' + (e.classes?.nom||'') + '</span>' +
+      '</button>';
+  }).join('');
+  // Sélectionner le premier enfant par défaut
+  if (mesEnfants.length > 0) selectionnerEnfant(mesEnfants[0].id);
+}
+
+function selectionnerEnfant(eleveId) {
+  enfantActifId = eleveId;
+  // Mettre à jour les onglets
+  mesEnfants.forEach(function(e) {
+    var btn = document.getElementById('onglet-' + e.id);
+    if (btn) {
+      btn.style.background = e.id === eleveId ? '#185FA5' : '#fff';
+      btn.style.color = e.id === eleveId ? '#fff' : '#555';
+    }
+  });
+  // Recharger les données selon la page active
+  var pageActive = document.querySelector('.page.active');
+  if (pageActive) {
+    var id = pageActive.id.replace('page-', '');
+    if (id === 'notes') chargerNotes();
+    if (id === 'absences') chargerAbsences();
+    if (id === 'bulletins') chargerBulletins();
+    if (id === 'dashboard') chargerDashboard();
+  }
+}
+
+function toggleSidebar() {
+  document.querySelector('.sidebar').classList.toggle('open');
+  document.getElementById('sidebar-overlay').classList.toggle('open');
+}
+
+function closeSidebar() {
+  document.querySelector('.sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+}
+
 function showPage(id, navEl) {
+  closeSidebar();
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
@@ -294,11 +391,12 @@ function showPage(id, navEl) {
   const m = pageMeta[id] || [id, ''];
   document.getElementById('page-title').textContent = m[0];
   document.getElementById('page-sub').textContent = m[1];
-  if (id === 'enfants') chargerEnfants();
   if (id === 'notes') chargerNotes();
   if (id === 'absences') chargerAbsences();
   if (id === 'bulletins') chargerBulletins();
   if (id === 'annonces') chargerAnnonces();
+  if (id === 'devoirs') chargerDevoirsParent();
+  if (id === 'preinscription') chargerPagePreinscription();
 }
 
 async function chargerDashboard() {
@@ -380,76 +478,111 @@ async function chargerEnfants() {
     </div>`).join('');
 }
 
-async function chargerNotes() {
+ async function chargerNotes() {
   document.getElementById('load-notes').style.display = 'block';
   document.getElementById('cont-notes').innerHTML = '';
-  if (!ecoleId || mesEnfants.length === 0) {
-    document.getElementById('load-notes').innerHTML = '<div class="empty"><div class="empty-icon">📊</div>Aucune donnée disponible en mode démo.<br>Connectez-vous avec un vrai compte parent.</div>';
+  if (!enfantActifId) {
+    document.getElementById('load-notes').innerHTML = '<div class="empty"><div class="empty-icon">📊</div>Sélectionnez un enfant.</div>';
     return;
   }
-  for (const enfant of mesEnfants) {
-    const { data: notes } = await db.from('notes').select('*, matieres(nom,coefficient)').eq('eleve_id', enfant.id).order('created_at',{ascending:false});
-    const moy = (notes||[]).length ? ((notes||[]).reduce((s,n)=>s+Number(n.valeur),0)/(notes||[]).length).toFixed(1) : '—';
-    document.getElementById('cont-notes').innerHTML += `
-      <div class="card">
-        <div class="card-title">${enfant.prenom} ${enfant.nom} — Moyenne : <span style="color:${moy>=10?'#3B6D11':'#A32D2D'}">${moy}/20</span></div>
-        <table>
-          <thead><tr><th>Matière</th><th>Note</th><th>Coef.</th><th>Appréciation</th></tr></thead>
-          <tbody>
-            ${(notes||[]).length === 0 ? '<tr><td colspan="4" style="text-align:center;color:#aaa;padding:16px">Aucune note pour l\'instant</td></tr>' :
-            (notes||[]).map(n => `<tr>
-              <td style="font-weight:500">${n.matieres?.nom||'—'}</td>
-              <td class="${Number(n.valeur)>=14?'note-high':Number(n.valeur)>=10?'note-mid':'note-low'}">${n.valeur}/20</td>
-              <td style="color:#888">${n.matieres?.coefficient||1}</td>
-              <td style="font-size:12px;color:#888">${n.appreciation||'—'}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>`;
-  }
+  var enfant = mesEnfants.find(function(e) { return e.id === enfantActifId; });
+  if (!enfant) return;
+  var { data: notes } = await db.from('notes').select('*, matieres(nom,coefficient)').eq('eleve_id', enfantActifId).order('created_at',{ascending:false});
+  notes = notes || [];
+  var moy = notes.length ? (notes.reduce(function(s,n){return s+Number(n.valeur);},0)/notes.length).toFixed(1) : '—';
+  document.getElementById('cont-notes').innerHTML =
+    '<div class="card">' +
+    '<div class="card-title">' + (enfant.prenom||'') + ' ' + enfant.nom + ' — Moyenne : <span style="color:' + (moy>=10?'#3B6D11':'#A32D2D') + '">' + moy + '/20</span></div>' +
+    '<table><thead><tr><th>Matière</th><th>Note</th><th>Coef.</th><th>Appréciation</th></tr></thead><tbody>' +
+    (notes.length === 0 ? '<tr><td colspan="4" style="text-align:center;color:#aaa;padding:16px">Aucune note pour l\'instant</td></tr>' :
+    notes.map(function(n) {
+      return '<tr><td style="font-weight:500">' + (n.matieres?.nom||'—') + '</td>' +
+        '<td class="' + (Number(n.valeur)>=14?'note-high':Number(n.valeur)>=10?'note-mid':'note-low') + '">' + n.valeur + '/20</td>' +
+        '<td style="color:#888">' + (n.matieres?.coefficient||1) + '</td>' +
+        '<td style="font-size:12px;color:#888">' + (n.appreciation||'—') + '</td></tr>';
+    }).join('')) +
+    '</tbody></table></div>';
   document.getElementById('load-notes').style.display = 'none';
 }
 
 async function chargerAbsences() {
   document.getElementById('load-absences').style.display = 'block';
   document.getElementById('cont-absences').style.display = 'none';
-  if (!ecoleId || mesEnfants.length === 0) {
-    document.getElementById('load-absences').innerHTML = '<div class="empty"><div class="empty-icon">📌</div>Aucune donnée en mode démo.</div>';
+  if (!enfantActifId) {
+    document.getElementById('load-absences').innerHTML = '<div class="empty"><div class="empty-icon">📌</div>Sélectionnez un enfant.</div>';
     return;
   }
-  const absences = [];
-  for (const enfant of mesEnfants) {
-    const { data } = await db.from('absences').select('*').eq('eleve_id', enfant.id).order('date_absence',{ascending:false});
-    (data||[]).forEach(a => absences.push({ ...a, enfant }));
-  }
+  var enfant = mesEnfants.find(function(e) { return e.id === enfantActifId; });
+  var { data: absences } = await db.from('absences').select('*').eq('eleve_id', enfantActifId).order('date_absence',{ascending:false});
+  absences = absences || [];
   document.getElementById('load-absences').style.display = 'none';
   document.getElementById('cont-absences').style.display = 'block';
   document.getElementById('tbody-absences').innerHTML = absences.length === 0
     ? '<tr><td colspan="4" style="text-align:center;color:#aaa;padding:20px">✅ Aucune absence enregistrée</td></tr>'
-    : absences.map(a => `<tr>
-        <td style="font-weight:500">${a.enfant.prenom} ${a.enfant.nom}</td>
-        <td style="color:#888;font-size:12px">${new Date(a.date_absence).toLocaleDateString('fr-FR')}</td>
-        <td>${a.periode}</td>
-        <td><span class="badge ${a.justifiee?'badge-ok':'badge-warn'}">${a.justifiee?'Justifiée':'Non justifiée'}</span></td>
-      </tr>`).join('');
+    : absences.map(function(a) {
+        return '<tr>' +
+          '<td style="font-weight:500">' + (enfant?.prenom||'') + ' ' + (enfant?.nom||'') + '</td>' +
+          '<td style="color:#888;font-size:12px">' + new Date(a.date_absence).toLocaleDateString('fr-FR') + '</td>' +
+          '<td>' + (a.periode||'—') + '</td>' +
+          '<td><span class="badge ' + (a.justifiee?'badge-ok':'badge-warn') + '">' + (a.justifiee?'Justifiée':'Non justifiée') + '</span></td>' +
+          '</tr>';
+      }).join('');
 }
 
 async function chargerBulletins() {
   document.getElementById('load-bulletins').style.display = 'none';
-  document.getElementById('cont-bulletins').innerHTML = mesEnfants.length === 0
-    ? '<div class="empty"><div class="empty-icon">📄</div>Connectez-vous avec un vrai compte pour accéder aux bulletins.</div>'
-    : mesEnfants.map(e => `
-      <div class="card">
-        <div class="card-title">${e.prenom} ${e.nom}</div>
-        <div style="display:flex;flex-direction:column;gap:8px">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:#f9f9f9;border-radius:8px">
-            <div><div style="font-size:13px;font-weight:500">Bulletin — Trimestre 2 · 2025-2026</div><div style="font-size:11px;color:#aaa;margin-top:2px">Disponible</div></div>
-            <button class="btn btn-primary" style="font-size:12px;padding:6px 12px" onclick="alert('📄 Bulletin PDF — Disponible après génération par l\\'école')">Télécharger</button>
-          </div>
-        </div>
-      </div>`).join('');
+  if (!enfantActifId) {
+    document.getElementById('cont-bulletins').innerHTML = '<div class="empty"><div class="empty-icon">📄</div>Sélectionnez un enfant.</div>';
+    return;
+  }
+  var enfant = mesEnfants.find(function(e) { return e.id === enfantActifId; });
+  document.getElementById('cont-bulletins').innerHTML =
+    '<div class="card">' +
+    '<div class="card-title">' + (enfant?.prenom||'') + ' ' + (enfant?.nom||'') + '</div>' +
+    '<div style="display:flex;flex-direction:column;gap:8px">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:#f9f9f9;border-radius:8px">' +
+    '<div><div style="font-size:13px;font-weight:500">Bulletin — Trimestre 2 · 2025-2026</div>' +
+    '<div style="font-size:11px;color:#aaa;margin-top:2px">Disponible</div></div>' +
+    '<button class="btn btn-primary" style="font-size:12px;padding:6px 12px" onclick="genererBulletinPDF(\'' + enfantActifId + '\')">📄 Télécharger</button>' +
+    '</div></div></div>';
 }
-
+async function chargerDevoirsParent() {
+  var cont = document.getElementById('cont-devoirs-parent');
+  var load = document.getElementById('load-devoirs-parent');
+  if (!cont || !load) return;
+  if (!enfantActifId) {
+    cont.innerHTML = '<div class="empty"><div class="empty-icon">📝</div>Sélectionnez un enfant.</div>';
+    return;
+  }
+  var enfant = mesEnfants.find(function(e) { return e.id === enfantActifId; });
+  if (!enfant?.classe_id) {
+    cont.innerHTML = '<div class="empty"><div class="empty-icon">📝</div>Cet enfant n\'est pas encore assigné à une classe.</div>';
+    return;
+  }
+  load.style.display = 'block';
+  cont.innerHTML = '';
+  var { data: devoirs } = await db.from('devoirs')
+    .select('*, matieres(nom), utilisateurs(nom,prenom)')
+    .eq('classe_id', enfant.classe_id)
+    .order('created_at', { ascending: false });
+  load.style.display = 'none';
+  devoirs = devoirs || [];
+  cont.innerHTML = devoirs.length === 0
+    ? '<div class="empty"><div class="empty-icon">📝</div>Aucun devoir publié pour cette classe.</div>'
+    : devoirs.map(function(d) {
+        var dateRendu = d.date_rendu ? new Date(d.date_rendu).toLocaleDateString('fr-FR') : 'Sans date limite';
+        var isUrgent = d.date_rendu && new Date(d.date_rendu) <= new Date(Date.now() + 2*86400000);
+        return '<div style="background:#fff;border:1px solid ' + (isUrgent?'#F09595':'#e8e8e8') + ';border-radius:10px;padding:14px;margin-bottom:10px">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+          '<span style="font-size:13px;font-weight:700;color:#3C3489">' + (d.matieres?.nom||'—') + '</span>' +
+          '<span style="font-size:11px;background:' + (isUrgent?'#FCEBEB':'#EEEDFE') + ';color:' + (isUrgent?'#791F1F':'#3C3489') + ';padding:2px 8px;border-radius:10px;font-weight:600">📅 ' + dateRendu + '</span>' +
+          '</div>' +
+          '<div style="font-size:13px;font-weight:600;margin-bottom:4px">' + d.titre + '</div>' +
+          '<div style="font-size:12px;color:#555">' + (d.contenu||'') + '</div>' +
+          '<div style="font-size:11px;color:#aaa;margin-top:6px">Publié par ' + (d.utilisateurs?.prenom||'') + ' ' + (d.utilisateurs?.nom||'') + '</div>' +
+          '</div>';
+      }).join('');
+}
 async function chargerAnnonces() {
   document.getElementById('load-annonces').style.display = 'block';
   document.getElementById('cont-annonces').innerHTML = '';
@@ -469,26 +602,73 @@ async function chargerAnnonces() {
       </div>`).join('');
 }
 
+function remplirInfosEnfant() {
+  var eleveId = document.getElementById('pi-enfant').value;
+  var cont = document.getElementById('infos-enfant-preinsc');
+  if (!eleveId) { cont.style.display = 'none'; return; }
+  var enfant = mesEnfants.find(function(e) { return e.id === eleveId; });
+  if (!enfant) return;
+  document.getElementById('detail-enfant-preinsc').innerHTML =
+    '<strong>' + (enfant.prenom||'') + ' ' + enfant.nom + '</strong>' +
+    ' · Classe actuelle : <strong>' + (enfant.classes?.nom||'Non assigné') + '</strong>' +
+    ' · Matricule : <strong>' + (enfant.numero_matricule||'—') + '</strong>';
+
+  // Remplir classes disponibles
+  var sel = document.getElementById('pi-classe');
+  sel.innerHTML = '<option value="">Sélectionner...</option>';
+  toutesClassesParent.forEach(function(c) {
+    sel.innerHTML += '<option value="' + c.id + '">' + c.nom + '</option>';
+  });
+  cont.style.display = 'block';
+}
+
+var toutesClassesParent = [];
+
+async function chargerPagePreinscription() {
+  // Remplir select enfants
+  var sel = document.getElementById('pi-enfant');
+  sel.innerHTML = '<option value="">— Choisir un enfant —</option>';
+  mesEnfants.forEach(function(e) {
+    sel.innerHTML += '<option value="' + e.id + '">' + (e.prenom||'') + ' ' + e.nom + ' (' + (e.classes?.nom||'Sans classe') + ')</option>';
+  });
+  // Charger classes
+  if (ecoleId) {
+    var { data: cls } = await db.from('classes').select('id,nom').eq('ecole_id', ecoleId).order('nom');
+    toutesClassesParent = cls || [];
+  }
+}
+
 async function soumettrePreinscription() {
-  const prenom = document.getElementById('pi-prenom').value.trim();
-  const nom = document.getElementById('pi-nom').value.trim();
-  const code = document.getElementById('pi-code').value.trim().toUpperCase();
-  const tel = document.getElementById('pi-tel').value.trim();
-  const classe = document.getElementById('pi-classe').value;
-  const ddn = document.getElementById('pi-ddn').value;
-  const sexe = document.getElementById('pi-sexe').value;
-  if (!prenom || !nom || !code) return alert('Remplissez les champs obligatoires.');
-  const { data: ecole } = await db.from('ecoles').select('id,nom').eq('code_acces', code).maybeSingle();
-  if (!ecole) return alert('Code établissement invalide. Vérifiez avec l\'école.');
-  await db.from('preinscriptions').insert([{
-    ecole_id: ecole.id, prenom, nom, date_naissance: ddn||null, sexe,
-    classe_souhaitee: classe, email_parent: currentUser?.email||'demo@demo.com',
-    telephone_parent: tel ? '+224'+tel : null, statut: 'en_attente'
+  var eleveId = document.getElementById('pi-enfant').value;
+  var classeId = document.getElementById('pi-classe').value;
+  var message = document.getElementById('pi-message').value.trim();
+  var errDiv = document.getElementById('err-preinsc');
+  var okDiv = document.getElementById('ok-preinsc');
+
+  if (!eleveId) { errDiv.textContent = 'Sélectionnez un enfant.'; errDiv.style.display = 'block'; return; }
+  if (!classeId) { errDiv.textContent = 'Sélectionnez une classe souhaitée.'; errDiv.style.display = 'block'; return; }
+
+  var enfant = mesEnfants.find(function(e) { return e.id === eleveId; });
+  var classe = toutesClassesParent.find(function(c) { return c.id === classeId; });
+
+  var res = await db.from('preinscriptions').insert([{
+    ecole_id: ecoleId,
+    prenom: enfant.prenom,
+    nom: enfant.nom,
+    classe_souhaitee: classe?.nom || classeId,
+    email_parent: currentUser?.email || '',
+    telephone_parent: currentUser?.telephone || null,
+    statut: 'en_attente',
+    notes: message || null
   }]);
-  alert(`✅ Demande envoyée pour ${prenom} ${nom} à ${ecole.nom} !\nL'école vous contactera sous 48h.`);
-  document.getElementById('pi-prenom').value = '';
-  document.getElementById('pi-nom').value = '';
-  document.getElementById('pi-code').value = '';
+
+  if (res.error) { errDiv.textContent = 'Erreur : ' + res.error.message; errDiv.style.display = 'block'; return; }
+
+  errDiv.style.display = 'none';
+  okDiv.textContent = '✅ Demande de ré-inscription envoyée pour ' + (enfant.prenom||'') + ' ' + enfant.nom + ' en ' + (classe?.nom||'') + '. Le directeur vous contactera.';
+  okDiv.style.display = 'block';
+  document.getElementById('pi-enfant').value = '';
+  document.getElementById('infos-enfant-preinsc').style.display = 'none';
 }
 
 async function envoyerSignalement() {
