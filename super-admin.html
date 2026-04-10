@@ -93,6 +93,17 @@
     .signal-card { background: #FCEBEB; border: 1px solid #F09595; border-radius: 12px; padding: 16px; margin-bottom: 10px; }
     .signal-card.resolu { background: #f9f9f9; border-color: #e8e8e8; opacity: 0.6; }
     .paiement-row { display: flex; align-items: center; gap: 12px; padding: 14px; background: #f9f9f9; border-radius: 10px; margin-bottom: 8px; }
+    .hamburger { display:none; background:none; border:none; cursor:pointer; font-size:24px; padding:4px 8px; color:#1a1a1a; }
+@media (max-width: 768px) {
+  .sidebar { position:fixed; left:-240px; top:0; height:100%; z-index:200; transition:left 0.3s; box-shadow:2px 0 16px rgba(0,0,0,0.15); }
+  .sidebar.open { left:0; }
+  .sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:199; }
+  .sidebar-overlay.open { display:block; }
+  .hamburger { display:inline-block !important; }
+  .main { margin-left:0 !important; }
+  .stats-grid { grid-template-columns:1fr 1fr; }
+  .grid2, .grid3 { grid-template-columns:1fr; }
+}
   </style>
 </head>
 <body>
@@ -805,8 +816,14 @@ function openModal(type, data) {
           <option value="premium">Premium — 1 500 000 GNF/mois (illimité, 4 admins)</option>
         </select>
       </div>
-      <div class="field"><label>Nom du directeur</label><input type="text" id="m-directeur" placeholder="Mamadou Diallo"/></div>
-      <div class="field"><label>Email du directeur *</label><input type="email" id="m-dir-email" placeholder="directeur@ecole.gn"/></div>
+      <div style="background:#E6F1FB;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#0C447C;border-left:3px solid #185FA5">
+        👤 <strong>Compte directeur</strong> — Un compte sera créé automatiquement avec un mot de passe temporaire.
+      </div>
+      <div class="field-grid">
+        <div class="field"><label>Nom complet du directeur ✱</label><input type="text" id="m-directeur" placeholder="Mamadou Diallo"/></div>
+        <div class="field"><label>Téléphone directeur</label><input type="tel" id="m-dir-tel" placeholder="620 000 000" maxlength="9"/></div>
+      </div>
+      <div class="field"><label>Email du directeur ✱</label><input type="email" id="m-dir-email" placeholder="directeur@ecole.gn"/></div>
       <div class="modal-actions">
         <button class="btn" onclick="closeModal()">Annuler</button>
         <button class="btn btn-primary" onclick="creerNouvelleEcole()">Créer l'école</button>
@@ -839,44 +856,105 @@ function openModal(type, data) {
   document.getElementById('modal-bg').classList.add('open');
 }
 
+function toggleSidebar() {
+  document.querySelector('.sidebar').classList.toggle('open');
+  document.getElementById('sidebar-overlay').classList.toggle('open');
+}
+function closeSidebar() {
+  document.querySelector('.sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+}
+
 function closeModal() {
   document.getElementById('modal-bg').classList.remove('open');
 }
 
 async function creerNouvelleEcole() {
-  const nom = document.getElementById('m-nom').value.trim();
-  const ville = document.getElementById('m-ville').value;
-  const commune = document.getElementById('m-commune').value.trim();
-  const tel = document.getElementById('m-tel').value.trim();
-  const email = document.getElementById('m-email').value.trim();
-  const plan = document.getElementById('m-plan').value;
-  const dirEmail = document.getElementById('m-dir-email').value.trim();
+  var nom = document.getElementById('m-nom').value.trim();
+  var ville = document.getElementById('m-ville').value;
+  var commune = document.getElementById('m-commune').value.trim();
+  var tel = document.getElementById('m-tel').value.trim();
+  var email = document.getElementById('m-email').value.trim();
+  var plan = document.getElementById('m-plan').value;
+  var dirNom = document.getElementById('m-directeur').value.trim();
+  var dirEmail = document.getElementById('m-dir-email').value.trim();
+  var dirTel = document.getElementById('m-dir-tel').value.trim();
 
-  if (!nom || !ville || !dirEmail) {
-    const err = document.getElementById('modal-err');
-    err.textContent = 'Remplissez les champs obligatoires (nom, ville, email directeur).';
+  if (!nom || !ville || !dirEmail || !dirNom) {
+    var err = document.getElementById('modal-err');
+    err.textContent = 'Remplissez les champs obligatoires (nom école, ville, nom + email directeur).';
     err.style.display = 'block';
     return;
   }
 
-  const limites = { gratuit:{max_admins:1,max_eleves:100}, standard:{max_admins:2,max_eleves:500}, premium:{max_admins:4,max_eleves:999999} };
-  const code = genererCode(nom);
+  var limites = { gratuit:{max_admins:1,max_eleves:100}, standard:{max_admins:2,max_eleves:500}, premium:{max_admins:4,max_eleves:999999} };
+  var code = genererCode(nom);
+
+  // Générer mdp directeur
+  var mdpDir = dirNom.replace(/\s/g,'').substring(0,3).toUpperCase() + Math.floor(1000+Math.random()*9000) + ['@','#','$','!'][Math.floor(Math.random()*4)] + dirNom.replace(/\s/g,'').substring(3,5).toLowerCase();
+
+  var btn = document.querySelector('#modal-content .btn-primary');
+  btn.disabled = true; btn.textContent = 'Création en cours...';
 
   try {
-    const { error } = await db.from('ecoles').insert([{
-      nom, ville, commune, telephone: tel, email, code_acces: code,
-      plan, abonnement_actif: true,
+    // 1. Créer l'école
+    var resEcole = await db.from('ecoles').insert([{
+      nom: nom, ville: ville, commune: commune,
+      telephone: tel, email: email,
+      code_acces: code, plan: plan,
+      abonnement_actif: true,
       ...limites[plan]
-    }]);
-    if (error) throw error;
+    }]).select().single();
+    if (resEcole.error) throw resEcole.error;
+    var ecoleId = resEcole.data.id;
+
+    // 2. Créer compte Auth directeur
+    var emailInterne = dirEmail; // Le directeur utilise son vrai email
+    var authRes = await fetch('https://rcojerlzguwqpclyudjo.supabase.co/auth/v1/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjb2plcmx6Z3V3cXBjbHl1ZGpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NTg1MzIsImV4cCI6MjA5MTAzNDUzMn0.4R_NOrYLdhkVMKw87Z33FLS9LoAUAgVj_Uk_RBCf8tg' },
+      body: JSON.stringify({ email: emailInterne, password: mdpDir })
+    }).then(function(r) { return r.json(); });
+
+    var authId = authRes.user ? authRes.user.id : (authRes.id || null);
+
+    // 3. Créer profil directeur dans utilisateurs
+    if (authId) {
+      var nomParts = dirNom.trim().split(' ');
+      var prenom = nomParts[0];
+      var nomFam = nomParts.slice(1).join(' ') || nomParts[0];
+      await db.from('utilisateurs').insert([{
+        id: authId,
+        nom: nomFam, prenom: prenom,
+        role: 'admin_ecole',
+        ecole_id: ecoleId,
+        actif: true,
+        compte_active: true,
+        email: dirEmail,
+        telephone: dirTel ? '+224' + dirTel : null,
+        auth_id: authId,
+        mdp_temp: mdpDir,
+        premiere_connexion: true
+      }]);
+    }
+
     closeModal();
-    alert(`✅ École "${nom}" créée !\n\nCode d'accès : ${code}\nPartagez ce code avec le directeur pour qu'il puisse créer son compte.`);
+    alert('✅ École "' + nom + '" créée avec succès !\n\n' +
+      '📋 CODE D\'ACCÈS ÉCOLE :\n' + code + '\n\n' +
+      '👤 COMPTE DIRECTEUR :\n' +
+      '─────────────────────────\n' +
+      'Email : ' + dirEmail + '\n' +
+      'Mot de passe : ' + mdpDir + '\n' +
+      '─────────────────────────\n' +
+      '⚠️ Communiquez ces informations au directeur.\n' +
+      'Il devra changer son mot de passe à la première connexion.');
     await chargerDashboard();
     await chargerEcoles();
   } catch(e) {
-    const err = document.getElementById('modal-err');
-    err.textContent = 'Erreur : ' + e.message;
-    err.style.display = 'block';
+    var errEl = document.getElementById('modal-err');
+    errEl.textContent = 'Erreur : ' + e.message;
+    errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Créer l\'école';
   }
 }
 
