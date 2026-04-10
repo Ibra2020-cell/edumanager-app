@@ -120,6 +120,7 @@
       <div class="nav-item" onclick="showPage('matieres',this)"><span class="nav-icon">📚</span> Matières</div>
       <div class="nav-item" onclick="showPage('notes',this)"><span class="nav-icon">📊</span> Notes & bulletins</div>
       <div class="nav-item" onclick="showPage('absences',this)"><span class="nav-icon">📌</span> Absences</div>
+      <div class="nav-item" onclick="showPage('parents',this)"><span class="nav-icon">👨‍👩‍👧</span> Parents</div>
       <div class="nav-section">Communication</div>
       <div class="nav-item" onclick="showPage('annonces',this)"><span class="nav-icon">📢</span> Annonces</div>
       <div class="nav-item" onclick="showPage('evenements',this)"><span class="nav-icon">📅</span> Événements</div>
@@ -330,6 +331,24 @@
         </div>
       </div>
 
+      <!-- PARENTS -->
+      <div class="page" id="page-parents">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+          <div>
+            <div style="font-size:18px;font-weight:700">Parents</div>
+            <div style="font-size:13px;color:#888">Gestion des parents d'élèves</div>
+          </div>
+          <button class="btn btn-primary" onclick="ouvrirModal('parent')">+ Ajouter un parent</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+          <input type="text" id="search-parents" placeholder="Rechercher par nom ou matricule..." oninput="filtrerParents()" style="flex:1;min-width:160px;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px"/>
+        </div>
+        <div id="load-parents" class="loading"><div class="spinner"></div>Chargement...</div>
+        <div id="cont-parents" style="display:none">
+          <div id="liste-parents-cards"></div>
+        </div>
+      </div>
+
       <!-- ANNONCES -->
       <div class="page" id="page-annonces">
         <div class="card" style="margin-bottom:16px">
@@ -527,6 +546,7 @@ const pageMeta = {
   matieres:       ['Matières', 'Disciplines enseignées', '+ Ajouter une matière', 'matiere'],
   notes:          ['Notes & bulletins', 'Résultats scolaires', '', ''],
   absences:       ['Absences', 'Appel et gestion des présences', '', ''],
+  parents:        ['Parents', 'Gestion des parents d\'élèves', '', ''],
   annonces:       ['Annonces', 'Communication avec les familles', '', ''],
   evenements:     ['Événements', 'Agenda de l\'école', '+ Créer un événement', 'evenement'],
   paiement:       ['Abonnement', 'Gérer votre plan', '', ''],
@@ -552,6 +572,7 @@ async function showPage(id, navEl) {
   if (id === 'matieres') await chargerMatieres();
   if (id === 'notes') await preparerNotes();
   if (id === 'absences') await preparerAbsences();  
+  if (id === 'parents') await chargerParents();
   if (id === 'annonces') await chargerAnnonces();
   if (id === 'evenements') await chargerEvenements();
 }
@@ -918,6 +939,63 @@ async function sauvegarderModifEleve(id) {
   fermerModal();
   alert('✅ Élève modifié avec succès !');
   chargerEleves();
+}
+async function sauvegarderParent() {
+  var prenom = document.getElementById('m-prenom').value.trim();
+  var nom = document.getElementById('m-nom').value.trim();
+  var tel = document.getElementById('m-tel').value.trim();
+  if (!prenom || !nom) { showModalErr('Prénom et nom obligatoires.'); return; }
+  if (!tel) { showModalErr('Téléphone obligatoire.'); return; }
+
+  // Récupérer code école
+  if (!codeEcole && ecoleId) {
+    var resEcole = await db.from('ecoles').select('code_acces').eq('id', ecoleId).single();
+    if (resEcole.data) codeEcole = resEcole.data.code_acces;
+  }
+
+  // Générer matricule
+  var { count } = await db.from('utilisateurs').select('id', { count: 'exact' }).eq('ecole_id', ecoleId).eq('role', 'parent');
+  var mat = genererMatriculeParent(codeEcole, new Date().getFullYear(), (count||0) + 1);
+  var emailInterne = genererEmail(mat, codeEcole);
+  var mdpTemp = genererMotDePasse(mat);
+
+  // Créer compte Auth
+  var authRes = await fetch('https://rcojerlzguwqpclyudjo.supabase.co/auth/v1/signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjb2plcmx6Z3V3cXBjbHl1ZGpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NTg1MzIsImV4cCI6MjA5MTAzNDUzMn0.4R_NOrYLdhkVMKw87Z33FLS9LoAUAgVj_Uk_RBCf8tg' },
+    body: JSON.stringify({ email: emailInterne, password: mdpTemp })
+  }).then(function(r) { return r.json(); });
+
+  var authId = authRes.user ? authRes.user.id : (authRes.id || null);
+  if (!authId) { showModalErr('Erreur création compte : ' + (authRes.msg || authRes.message || authRes.error_description || JSON.stringify(authRes))); return; }
+
+  // Insérer dans utilisateurs
+  var res = await db.from('utilisateurs').insert([{
+    id: authId,
+    nom: nom, prenom: prenom,
+    role: 'parent',
+    ecole_id: ecoleId,
+    actif: true,
+    compte_active: true,
+    numero_matricule: mat,
+    email: emailInterne,
+    telephone: '+224' + tel,
+    auth_id: authId,
+    mdp_temp: mdpTemp,
+    premiere_connexion: true
+  }]);
+  if (res.error) { showModalErr(res.error.message); return; }
+
+  // Rattacher les enfants
+  if (window._enfantsTemp && window._enfantsTemp.length > 0) {
+    await db.from('parents_eleves').insert(window._enfantsTemp.map(function(e) {
+      return { parent_id: authId, eleve_id: e.id };
+    }));
+  }
+
+  fermerModal();
+  alert('✅ ' + prenom + ' ' + nom + ' ajouté(e) !\n\n📋 IDENTIFIANTS DE CONNEXION :\n─────────────────────────\nMatricule : ' + mat + '\nMot de passe : ' + mdpTemp + '\n─────────────────────────\n⚠️ Donnez ces identifiants au parent.\nIl devra changer son mot de passe à la première connexion.');
+  chargerParents();
 }
 async function supprimerEleve(id, nom) {
   if (!confirm('Supprimer ' + nom + ' et toutes ses données (notes, absences, parents) ?')) return;
@@ -1597,7 +1675,154 @@ function afficherHeures(parProfList) {
 }
 
 // ============================================
-// ANNONCES
+// PARENTS
+// ============================================
+var tousParentsData = [];
+
+async function chargerParents() {
+  document.getElementById('load-parents').style.display = 'block';
+  document.getElementById('cont-parents').style.display = 'none';
+  if (!ecoleId) return;
+
+  var { data: parents } = await db.from('utilisateurs')
+    .select('*').eq('ecole_id', ecoleId).eq('role', 'parent').order('nom');
+  parents = parents || [];
+
+  // Charger enfants pour chaque parent
+  var parentsIds = parents.map(function(p) { return p.id; });
+  var enfantsParParent = {};
+  if (parentsIds.length > 0) {
+    var { data: liens } = await db.from('parents_eleves')
+      .select('parent_id, eleves(id,nom,prenom,classes(nom),numero_matricule)')
+      .in('parent_id', parentsIds);
+    (liens||[]).forEach(function(l) {
+      if (!enfantsParParent[l.parent_id]) enfantsParParent[l.parent_id] = [];
+      if (l.eleves) enfantsParParent[l.parent_id].push(l.eleves);
+    });
+  }
+
+  tousParentsData = parents.map(function(p) {
+    return { parent: p, enfants: enfantsParParent[p.id] || [] };
+  });
+
+  afficherParents(tousParentsData);
+  document.getElementById('load-parents').style.display = 'none';
+  document.getElementById('cont-parents').style.display = 'block';
+}
+
+function filtrerParents() {
+  var search = (document.getElementById('search-parents').value || '').toLowerCase();
+  var filtered = tousParentsData.filter(function(d) {
+    var nom = ((d.parent.prenom||'') + ' ' + d.parent.nom).toLowerCase();
+    var mat = (d.parent.numero_matricule||'').toLowerCase();
+    return !search || nom.includes(search) || mat.includes(search);
+  });
+  afficherParents(filtered);
+}
+
+function afficherParents(liste) {
+  var colors = ['#E6F1FB','#E1F5EE','#EEEDFE','#FAEEDA','#FCEBEB'];
+  var tcolors = ['#0C447C','#085041','#3C3489','#633806','#791F1F'];
+  if (liste.length === 0) {
+    document.getElementById('liste-parents-cards').innerHTML = '<div style="text-align:center;padding:40px;color:#aaa">Aucun parent trouvé</div>';
+    return;
+  }
+  document.getElementById('liste-parents-cards').innerHTML = liste.map(function(d, i) {
+    var p = d.parent;
+    var enfantsHtml = d.enfants.length === 0
+      ? '<div style="color:#aaa;font-size:12px;font-style:italic">Aucun enfant rattaché</div>'
+      : d.enfants.map(function(e) {
+          return '<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:#f9faf9;border-radius:6px;margin-bottom:4px">' +
+            '<div><span style="font-size:12px;font-weight:600;color:#0C447C">' + (e.prenom||'') + ' ' + e.nom + '</span>' +
+            '<span style="font-size:11px;color:#888;margin-left:6px">· ' + (e.classes?.nom||'Sans classe') + '</span></div>' +
+            '<span style="font-size:11px;color:#aaa">' + (e.numero_matricule||'—') + '</span>' +
+            '</div>';
+        }).join('');
+    return '<div style="background:#fff;border:1px solid #e8e8e8;border-radius:12px;padding:16px;margin-bottom:12px">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">' +
+      '<div style="display:flex;align-items:center;gap:10px">' +
+      '<div class="ava" style="background:' + colors[i%5] + ';color:' + tcolors[i%5] + ';width:42px;height:42px;font-size:15px">' + (p.prenom?.[0]||'') + (p.nom?.[0]||'') + '</div>' +
+      '<div><div style="font-weight:700;font-size:14px">' + (p.prenom||'') + ' ' + p.nom + '</div>' +
+      '<div style="font-size:11px;color:#999">📋 ' + (p.numero_matricule||'—') + ' · 📞 ' + (p.telephone||'—') + '</div></div></div>' +
+      '<div style="display:flex;align-items:center;gap:6px">' +
+      '<span style="font-size:11px;background:#E6F1FB;color:#0C447C;padding:2px 8px;border-radius:10px">' + d.enfants.length + ' enfant(s)</span>' +
+      '<span class="badge ' + (p.actif?'badge-ok':'badge-err') + '">' + (p.actif?'Actif':'Inactif') + '</span></div></div>' +
+      '<div style="border-top:1px solid #f0f0f0;padding-top:10px;margin-bottom:10px">' +
+      '<div style="font-size:11px;color:#888;font-weight:600;margin-bottom:6px;text-transform:uppercase">Enfants rattachés</div>' +
+      enfantsHtml + '</div>' +
+      '<div style="display:flex;gap:6px;justify-content:flex-end">' +
+      '<button class="btn-sm" onclick="modifierParent(\'' + p.id + '\')">✏️ Modifier</button>' +
+      '<button class="btn-sm" onclick="ajouterEnfantParent(\'' + p.id + '\')">➕ Enfant</button>' +
+      '<button class="btn-sm btn-danger" onclick="supprimerParent(\'' + p.id + '\',\'' + p.prenom + ' ' + p.nom + '\')">✕</button>' +
+      '</div></div>';
+  }).join('');
+}
+
+async function supprimerParent(id, nom) {
+  if (!confirm('Supprimer ' + nom + ' ?')) return;
+  await db.from('parents_eleves').delete().eq('parent_id', id);
+  await db.from('utilisateurs').delete().eq('id', id);
+  chargerParents();
+}
+
+async function ajouterEnfantParent(parentId) {
+  var { data: eleves } = await db.from('eleves').select('id,nom,prenom,classes(nom)').eq('ecole_id', ecoleId).order('nom');
+  var opts = (eleves||[]).map(function(e) {
+    return '<option value="' + e.id + '">' + (e.prenom||'') + ' ' + e.nom + ' (' + (e.classes?.nom||'Sans classe') + ')</option>';
+  }).join('');
+  document.getElementById('modal-content').innerHTML =
+    '<div class="modal-title">➕ Rattacher un enfant</div>' +
+    '<div class="alert alert-err" id="m-err"></div>' +
+    '<div class="field"><label>Sélectionner l\'élève</label>' +
+    '<select id="m-enfant-id" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff"><option value="">Choisir...</option>' + opts + '</select></div>' +
+    '<div class="modal-actions">' +
+    '<button class="btn" onclick="fermerModal()">Annuler</button>' +
+    '<button class="btn btn-primary" onclick="sauvegarderEnfantParent(\'' + parentId + '\')">Rattacher</button>' +
+    '</div>';
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+async function sauvegarderEnfantParent(parentId) {
+  var eleveId = document.getElementById('m-enfant-id').value;
+  if (!eleveId) { showModalErr('Sélectionnez un élève.'); return; }
+  var exist = await db.from('parents_eleves').select('id').eq('parent_id', parentId).eq('eleve_id', eleveId).maybeSingle();
+  if (exist.data) { showModalErr('Cet enfant est déjà rattaché à ce parent.'); return; }
+  await db.from('parents_eleves').insert([{ parent_id: parentId, eleve_id: eleveId }]);
+  fermerModal();
+  chargerParents();
+}
+
+async function modifierParent(id) {
+  var d = tousParentsData.find(function(d) { return d.parent.id === id; });
+  if (!d) return;
+  var p = d.parent;
+  document.getElementById('modal-content').innerHTML =
+    '<div class="modal-title">✏️ Modifier un parent</div>' +
+    '<div class="alert alert-err" id="m-err"></div>' +
+    '<div style="background:#f9f9f9;border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:12px;color:#888">Matricule : <strong>' + (p.numero_matricule||'—') + '</strong></div>' +
+    '<div class="field-grid">' +
+    '<div class="field"><label>Prénom ✱</label><input id="m-prenom" type="text" value="' + (p.prenom||'') + '"/></div>' +
+    '<div class="field"><label>Nom ✱</label><input id="m-nom" type="text" value="' + p.nom + '"/></div>' +
+    '</div>' +
+    '<div class="field"><label>Téléphone</label><input id="m-tel" type="tel" value="' + ((p.telephone||'').replace('+224','')) + '" maxlength="9"/></div>' +
+    '<div class="field"><label>Statut</label><select id="m-statut"><option value="true"' + (p.actif?' selected':'') + '>Actif</option><option value="false"' + (!p.actif?' selected':'') + '>Inactif</option></select></div>' +
+    '<div class="modal-actions">' +
+    '<button class="btn" onclick="fermerModal()">Annuler</button>' +
+    '<button class="btn btn-primary" onclick="sauvegarderModifParent(\'' + id + '\')">Enregistrer</button>' +
+    '</div>';
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+async function sauvegarderModifParent(id) {
+  var prenom = document.getElementById('m-prenom').value.trim();
+  var nom = document.getElementById('m-nom').value.trim();
+  var tel = document.getElementById('m-tel').value.trim();
+  var actif = document.getElementById('m-statut').value === 'true';
+  if (!prenom||!nom) { showModalErr('Prénom et nom obligatoires.'); return; }
+  await db.from('utilisateurs').update({ prenom, nom, telephone: tel ? '+224'+tel : null, actif }).eq('id', id);
+  fermerModal();
+  chargerParents();
+}
 // ============================================
 async function chargerAnnonces() {
   document.getElementById('load-annonces').style.display = 'block';
@@ -1787,25 +2012,54 @@ async function genererModalEleve() {
 }
 
 async function genererModalParent() {
-  const matricule = await getProchainMatriculeParent();
-  document.getElementById('modal-content').innerHTML = `
-    <div class="modal-title">👨‍👩‍👧 Ajouter un parent</div>
-    <div class="alert alert-err" id="m-err"></div>
-    <div style="background:#EAF3DE;border-radius:8px;padding:10px 12px;margin-bottom:14px;display:flex;align-items:center;gap:8px">
-      <span style="font-size:12px;color:#3B6D11;">Matricule généré automatiquement :</span>
-      <span class="matricule-badge matricule-generated">${matricule}</span>
-    </div>
-    <div class="field-grid">
-      <div class="field"><label>Prénom *</label><input id="m-prenom" type="text" placeholder="Fatoumata"/></div>
-      <div class="field"><label>Nom *</label><input id="m-nom" type="text" placeholder="Bah"/></div>
-    </div>
-    <div class="field"><label>Téléphone (+224) *</label><input id="m-tel" type="tel" placeholder="620 000 000"/></div>
-    <div class="field"><label>Email *</label><input id="m-email" type="email" placeholder="parent@email.com"/></div>
-    <input type="hidden" id="m-matricule-parent" value="${matricule}"/>
-    <div class="modal-actions">
-      <button class="btn" onclick="fermerModal()">Annuler</button>
-      <button class="btn btn-primary" onclick="sauvegarderParent()">✓ Ajouter</button>
-    </div>`;
+  var { data: eleves } = await db.from('eleves').select('id,nom,prenom,classes(nom)').eq('ecole_id', ecoleId).order('nom');
+  var opts = (eleves||[]).map(function(e) {
+    return '<option value="' + e.id + '">' + (e.prenom||'') + ' ' + e.nom + ' (' + (e.classes?.nom||'Sans classe') + ')</option>';
+  }).join('');
+  document.getElementById('modal-content').innerHTML =
+    '<div class="modal-title">👨‍👩‍👧 Ajouter un parent</div>' +
+    '<div class="alert alert-err" id="m-err"></div>' +
+    '<div style="background:#E6F1FB;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#0C447C;border-left:3px solid #185FA5">' +
+    'ℹ️ Un matricule et des identifiants seront générés automatiquement.' +
+    '</div>' +
+    '<div class="field-grid">' +
+    '<div class="field"><label>Prénom ✱</label><input id="m-prenom" type="text" placeholder="Fatoumata"/></div>' +
+    '<div class="field"><label>Nom ✱</label><input id="m-nom" type="text" placeholder="Bah"/></div>' +
+    '</div>' +
+    '<div class="field"><label>Téléphone ✱</label><input id="m-tel" type="tel" placeholder="620 000 000" maxlength="9"/></div>' +
+    '<div style="background:#f9f9f9;border-radius:8px;padding:10px 12px;margin-bottom:12px">' +
+    '<div style="font-size:12px;font-weight:600;color:#555;margin-bottom:8px">👶 Rattacher des enfants (optionnel)</div>' +
+    '<select id="m-enfant-sel" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:12px;margin-bottom:6px"><option value="">Sélectionner un élève...</option>' + opts + '</select>' +
+    '<button onclick="ajouterEnfantTemp()" style="padding:7px 12px;background:#E6F1FB;color:#0C447C;border:1px solid #ADD3F5;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">+ Ajouter</button>' +
+    '<div id="enfants-temp-list" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px"></div>' +
+    '</div>' +
+    '<div class="modal-actions">' +
+    '<button class="btn" onclick="fermerModal()">Annuler</button>' +
+    '<button class="btn btn-primary" onclick="sauvegarderParent()">✓ Ajouter et créer le compte</button>' +
+    '</div>';
+  document.getElementById('modal-bg').classList.add('open');
+  window._enfantsTemp = [];
+}
+
+function ajouterEnfantTemp() {
+  var sel = document.getElementById('m-enfant-sel');
+  var eleveId = sel.value;
+  var eleveNom = sel.options[sel.selectedIndex].text;
+  if (!eleveId) return;
+  if (window._enfantsTemp.find(function(e) { return e.id === eleveId; })) return;
+  window._enfantsTemp.push({ id: eleveId, nom: eleveNom });
+  document.getElementById('enfants-temp-list').innerHTML = window._enfantsTemp.map(function(e) {
+    return '<span style="background:#E6F1FB;color:#0C447C;padding:3px 8px;border-radius:4px;font-size:11px;display:inline-flex;align-items:center;gap:4px">' +
+      e.nom + '<span onclick="retirerEnfantTemp(\'' + e.id + '\')" style="cursor:pointer;font-weight:bold;color:#A32D2D">✕</span></span>';
+  }).join('');
+}
+
+function retirerEnfantTemp(id) {
+  window._enfantsTemp = window._enfantsTemp.filter(function(e) { return e.id !== id; });
+  document.getElementById('enfants-temp-list').innerHTML = window._enfantsTemp.map(function(e) {
+    return '<span style="background:#E6F1FB;color:#0C447C;padding:3px 8px;border-radius:4px;font-size:11px;display:inline-flex;align-items:center;gap:4px">' +
+      e.nom + '<span onclick="retirerEnfantTemp(\'' + e.id + '\')" style="cursor:pointer;font-weight:bold;color:#A32D2D">✕</span></span>';
+  }).join('');
 }
 
 function genererModalClasse() {
