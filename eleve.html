@@ -223,25 +223,31 @@ let ecoleId = null;
 let eleveId = null;
 let avisRatings = {};
 
-(async () => {
-  const demo = JSON.parse(localStorage.getItem('edu_user') || '{}');
-  if (demo.role === 'eleve') {
-    currentUser = { ...demo, demo: true };
-    const { data: ecoles } = await db.from('ecoles').select('*').limit(1);
-    if (ecoles?.length) { ecoleId = ecoles[0].id; document.getElementById('school-name').textContent = ecoles[0].nom; }
-  } else {
-    try {
-      const { data: { session } } = await db.auth.getSession();
-      if (!session) { window.location.href = 'index.html'; return; }
-      const { data: u } = await db.from('utilisateurs').select('*, ecoles(*)').eq('id', session.user.id).maybeSingle();
-      if (!u || u.role !== 'eleve') { window.location.href = 'index.html'; return; }
-      currentUser = u; ecoleId = u.ecole_id;
-      document.getElementById('school-name').textContent = u.ecoles?.nom || '';
-      // Trouver le profil élève
-      const { data: elv } = await db.from('eleves').select('*').eq('utilisateur_id', u.id).maybeSingle();
-      if (elv) { eleveId = elv.id; document.getElementById('user-classe').textContent = `Élève · ${elv.classe_id||'—'}`; }
-    } catch(e) { window.location.href = 'index.html'; return; }
-  }
+ (async () => {
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    if (!session) { window.location.href = 'index.html'; return; }
+    const { data: u } = await db.from('utilisateurs').select('*, ecoles(*)').eq('id', session.user.id).maybeSingle();
+    if (!u || u.role !== 'eleve') { window.location.href = 'index.html'; return; }
+    currentUser = u; ecoleId = u.ecole_id;
+    document.getElementById('school-name').textContent = u.ecoles?.nom || '';
+    localStorage.setItem('edu_user', JSON.stringify({ role: u.role, nom: u.nom, prenom: u.prenom, email: session.user.email, demo: false }));
+    // Trouver le profil élève via auth_id
+    var { data: elv } = await db.from('eleves').select('*').eq('auth_id', session.user.id).maybeSingle();
+    if (!elv) {
+      var { data: elv2 } = await db.from('eleves').select('*').eq('numero_matricule', u.numero_matricule).maybeSingle();
+      elv = elv2;
+    }
+    if (elv) {
+      eleveId = elv.id;
+      document.getElementById('user-name').textContent = (elv.prenom || '') + ' ' + (elv.nom || '');
+      document.getElementById('user-initials').textContent = ((elv.prenom?.[0]||'') + (elv.nom?.[0]||'')).toUpperCase();
+      document.getElementById('user-classe').textContent = 'Élève · ' + (elv.classes?.nom || elv.classe_id || '—');
+    } else {
+      document.getElementById('user-name').textContent = (u.prenom || '') + ' ' + (u.nom || '');
+      document.getElementById('user-initials').textContent = ((u.prenom?.[0]||'') + (u.nom?.[0]||'')).toUpperCase();
+    }
+  } catch(e) { window.location.href = 'index.html'; return; }
   const nom = currentUser.nom || 'Élève';
   const prenom = currentUser.prenom || '';
   document.getElementById('user-name').textContent = `${prenom} ${nom}`.trim();
