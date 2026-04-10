@@ -203,7 +203,7 @@
         <div class="card">
           <div id="load-preinsc" class="loading"><div class="spinner"></div>Chargement...</div>
           <table id="table-preinsc" style="display:none">
-            <thead><tr><th>Élève</th><th>Né(e) le</th><th>Classe souhaitée</th><th>Email parent</th><th>Téléphone parent</th><th>Date</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Élève</th><th>Matricule</th><th>Classe souhaitée</th><th>Contact parent</th><th>Date</th><th>Message</th><th>Actions</th></tr></thead>
             <tbody id="tbody-preinsc"></tbody>
           </table>
         </div>
@@ -946,6 +946,7 @@ async function sauvegarderParent() {
   var tel = document.getElementById('m-tel').value.trim();
   if (!prenom || !nom) { showModalErr('Prénom et nom obligatoires.'); return; }
   if (!tel) { showModalErr('Téléphone obligatoire.'); return; }
+  if (!window._enfantsTemp || window._enfantsTemp.length === 0) { showModalErr('Rattachez au moins un enfant avant d\'enregistrer.'); return; }
 
   // Récupérer code école
   if (!codeEcole && ecoleId) {
@@ -1013,37 +1014,134 @@ async function chargerPreinscriptions() {
   if (!ecoleId) return;
   const { data } = await db.from('preinscriptions').select('*').eq('ecole_id', ecoleId).order('created_at', { ascending: false });
   document.getElementById('load-preinsc').style.display = 'none';
+
+  var enAttente = (data||[]).filter(function(p) { return p.statut === 'en_attente'; });
+  var traites = (data||[]).filter(function(p) { return p.statut !== 'en_attente' && !p.archive; });
+  var archives = (data||[]).filter(function(p) { return p.archive; });
+
+  if ((data||[]).length === 0) {
+    document.getElementById('table-preinsc').style.display = 'table';
+    document.getElementById('tbody-preinsc').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:#aaa">Aucune pré-inscription reçue</td></tr>';
+    return;
+  }
+
+  var html = '';
+
+  if (enAttente.length > 0) {
+    html += '<tr><td colspan="6" style="background:#FFF8E6;padding:8px 12px;font-size:11px;font-weight:700;color:#633806;text-transform:uppercase;letter-spacing:0.05em">⏳ En attente (' + enAttente.length + ')</td></tr>';
+    html += enAttente.map(function(p) {
+      return '<tr style="background:#FFFDF5">' +
+        '<td><div style="font-weight:600;font-size:13px">' + (p.prenom||'') + ' ' + p.nom + '</div>' +
+        '<div style="font-size:11px;color:#888;margin-top:2px">📅 ' + (p.date_naissance ? new Date(p.date_naissance).toLocaleDateString('fr-FR') : '—') + '</div></td>' +
+        '<td style="font-size:11px;font-family:monospace;color:#555">' + (p.numero_matricule||'—') + '</td>' +
+        '<td><span style="background:#EEEDFE;color:#3C3489;padding:3px 8px;border-radius:6px;font-size:12px;font-weight:500">' + (p.classe_souhaitee||'—') + '</span></td>' +
+        '<td style="font-size:12px;color:#555">' +
+        '<div>📞 ' + (p.telephone_parent||'—') + '</div>' +
+        '<div style="color:#aaa;font-size:11px">✉️ ' + (p.email_parent||'—') + '</div></td>' +
+        '<td style="font-size:11px;color:#aaa">' + new Date(p.created_at).toLocaleDateString('fr-FR') + '</td>' +
+        '<td>' + (p.notes ? '<div style="font-size:11px;color:#666;font-style:italic">' + p.notes + '</div>' : '—') + '</td>' +
+        '<td><div style="display:flex;gap:4px;flex-wrap:wrap">' +
+        '<button class="btn-sm" style="background:#EAF3DE;color:#3B6D11;border-color:#C0DD97" onclick="validerPreinsc(\'' + p.id + '\',\'' + (p.prenom||'') + ' ' + p.nom + '\')">✅ Valider</button>' +
+        '<button class="btn-sm btn-danger" onclick="refuserPreinsc(\'' + p.id + '\',\'' + (p.prenom||'') + ' ' + p.nom + '\')">✕ Refuser</button>' +
+        '</div></td></tr>';
+    }).join('');
+  }
+
+  if (traites.length > 0) {
+    html += '<tr><td colspan="6" style="background:#f5f5f0;padding:8px 12px;font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.05em">📋 Traitées (' + traites.length + ')</td></tr>';
+    html += traites.map(function(p) {
+      return '<tr style="opacity:' + (p.archive ? '0.45' : '0.8') + '">' +
+        '<td><div style="font-weight:500;font-size:13px">' + (p.prenom||'') + ' ' + p.nom + '</div>' +
+        '<div style="font-size:11px;color:#888;margin-top:2px">📅 ' + (p.date_naissance ? new Date(p.date_naissance).toLocaleDateString('fr-FR') : '—') + '</div></td>' +
+        '<td style="font-size:11px;font-family:monospace;color:#888">' + (p.numero_matricule||'—') + '</td>' +
+        '<td><span style="background:#f0f0f0;color:#888;padding:3px 8px;border-radius:6px;font-size:12px">' + (p.classe_souhaitee||'—') + '</span></td>' +
+        '<td style="font-size:12px;color:#888">' +
+        '<div>📞 ' + (p.telephone_parent||'—') + '</div>' +
+        '<div style="color:#aaa;font-size:11px">✉️ ' + (p.email_parent||'—') + '</div></td>' +
+        '<td style="font-size:11px;color:#aaa">' + new Date(p.created_at).toLocaleDateString('fr-FR') + '</td>' +
+        '<td>' + (p.notes ? '<div style="font-size:11px;color:#666;font-style:italic">' + p.notes + '</div>' : '—') + '</td>' +
+        '<td><div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">' +
+        '<span class="badge ' + (p.statut==='accepte'?'badge-ok':'badge-err') + '">' + (p.statut==='accepte'?'✅ Acceptée':'✕ Refusée') + '</span>' +
+        (!p.archive ? '<button class="btn-sm" style="background:#f0f0f0;color:#555;font-size:10px" onclick="archiverPreinsc(\'' + p.id + '\')">📦 Archiver</button>' : '') +
+        '<button class="btn-sm btn-danger" style="font-size:10px" onclick="supprimerPreinsc(\'' + p.id + '\',\'' + (p.prenom||'') + ' ' + p.nom + '\')">🗑️ Supprimer</button>' +
+        '</div></td></tr>';
+    }).join('');
+  }
+
+  if (archives.length > 0) {
+    html += '<tr><td colspan="7" style="padding:8px 12px">' +
+      '<button onclick="toggleArchives()" style="background:none;border:none;cursor:pointer;font-size:12px;color:#aaa;text-decoration:underline" id="btn-archives">📦 Voir les archives (' + archives.length + ')</button>' +
+      '</td></tr>' +
+      '<tbody id="tbody-archives" style="display:none">' +
+      archives.map(function(p) {
+        return '<tr style="opacity:0.4">' +
+          '<td><div style="font-size:12px">' + (p.prenom||'') + ' ' + p.nom + '</div></td>' +
+          '<td style="font-size:11px;font-family:monospace;color:#aaa">' + (p.numero_matricule||'—') + '</td>' +
+          '<td style="font-size:11px;color:#aaa">' + (p.classe_souhaitee||'—') + '</td>' +
+          '<td style="font-size:11px;color:#aaa">📞 ' + (p.telephone_parent||'—') + '</td>' +
+          '<td style="font-size:11px;color:#aaa">' + new Date(p.created_at).toLocaleDateString('fr-FR') + '</td>' +
+          '<td>—</td>' +
+          '<td><div style="display:flex;gap:4px;align-items:center"><span style="font-size:10px;color:#aaa">📦 Archivée</span><button class="btn-sm btn-danger" style="font-size:10px" onclick="supprimerPreinsc(\'' + p.id + '\',\'' + (p.prenom||'') + ' ' + p.nom + '\')">🗑️</button></div></td>' +
+          '</tr>';
+      }).join('') +
+      '</tbody>';
+  }
+
+  if (archives.length > 0) {
+    html += '<tr><td colspan="7" style="padding:8px 12px">' +
+      '<button onclick="toggleArchives()" style="background:none;border:none;cursor:pointer;font-size:12px;color:#aaa;text-decoration:underline" id="btn-archives">📦 Voir les archives (' + archives.length + ')</button>' +
+      '</td></tr>' +
+      '<tbody id="tbody-archives" style="display:none">' +
+      archives.map(function(p) {
+        return '<tr style="opacity:0.4">' +
+          '<td><div style="font-size:12px">' + (p.prenom||'') + ' ' + p.nom + '</div></td>' +
+          '<td style="font-size:11px;font-family:monospace;color:#aaa">' + (p.numero_matricule||'—') + '</td>' +
+          '<td style="font-size:11px;color:#aaa">' + (p.classe_souhaitee||'—') + '</td>' +
+          '<td style="font-size:11px;color:#aaa">📞 ' + (p.telephone_parent||'—') + '</td>' +
+          '<td style="font-size:11px;color:#aaa">' + new Date(p.created_at).toLocaleDateString('fr-FR') + '</td>' +
+          '<td>—</td>' +
+          '<td><span style="font-size:10px;color:#aaa">📦 Archivée</span></td>' +
+          '</tr>';
+      }).join('') +
+      '</tbody>';
+  }
+
   document.getElementById('table-preinsc').style.display = 'table';
-  document.getElementById('tbody-preinsc').innerHTML = (data||[]).length === 0
-    ? '<tr><td colspan="7" style="text-align:center;padding:24px;color:#aaa">Aucune pré-inscription</td></tr>'
-    : (data||[]).map(p => `
-      <tr>
-        <td style="font-weight:500">${p.prenom} ${p.nom}</td>
-        <td style="color:#888;font-size:12px">${p.date_naissance ? new Date(p.date_naissance).toLocaleDateString('fr-FR') : '—'}</td>
-        <td>${p.classe_souhaitee||'—'}</td>
-        <td style="font-size:12px;color:#888">${p.email_parent}</td>
-        <td style="font-size:12px;color:#888">${p.telephone_parent||'—'}</td>
-        <td style="color:#aaa;font-size:11px">${new Date(p.created_at).toLocaleDateString('fr-FR')}</td>
-        <td><div style="display:flex;gap:4px">
-          ${p.statut==='en_attente' ? `
-            <button class="btn-sm" style="background:#EAF3DE;color:#3B6D11;border-color:#C0DD97" onclick="validerPreinsc('${p.id}','${p.prenom} ${p.nom}')">Valider</button>
-            <button class="btn-sm btn-danger" onclick="refuserPreinsc('${p.id}')">Refuser</button>
-          ` : `<span class="badge ${p.statut==='accepte'?'badge-ok':'badge-err'}">${p.statut}</span>`}
-        </div></td>
-      </tr>`).join('');
+  document.getElementById('tbody-preinsc').innerHTML = html;
+}
+
+function toggleArchives() {
+  var tbody = document.getElementById('tbody-archives');
+  var btn = document.getElementById('btn-archives');
+  if (!tbody) return;
+  var visible = tbody.style.display !== 'none';
+  tbody.style.display = visible ? 'none' : 'table-row-group';
+  btn.textContent = visible ? '📦 Voir les archives' : '📦 Masquer les archives';
 }
 
 async function validerPreinsc(id, nom) {
+  if (!confirm('Valider la pré-inscription de ' + nom + ' ?')) return;
   await db.from('preinscriptions').update({ statut: 'accepte' }).eq('id', id);
-  alert(`✅ Pré-inscription de ${nom} acceptée ! Pensez à créer son compte élève.`);
   await chargerPreinscriptions();
+  alert('✅ Pré-inscription de ' + nom + ' validée ! Pensez à créer son compte élève si ce n\'est pas encore fait.');
 }
 
-async function refuserPreinsc(id) {
+async function refuserPreinsc(id, nom) {
+  if (!confirm('Refuser la pré-inscription de ' + nom + ' ?')) return;
   await db.from('preinscriptions').update({ statut: 'refuse' }).eq('id', id);
   await chargerPreinscriptions();
 }
-
+async function archiverPreinsc(id) {
+  if (!confirm('Archiver cette pré-inscription ? Elle sera masquée de la liste principale.')) return;
+  await db.from('preinscriptions').update({ archive: true }).eq('id', id);
+  await chargerPreinscriptions();
+}
+async function supprimerPreinsc(id, nom) {
+  if (!confirm('⚠️ ATTENTION — Suppression définitive\n\nVous êtes sur le point de supprimer définitivement la pré-inscription de ' + nom + '.\n\nCette action est IRRÉVERSIBLE. Les données seront perdues pour toujours.\n\nConfirmez-vous la suppression ?')) return;
+  var { error } = await db.from('preinscriptions').delete().eq('id', id);
+  if (error) { alert('Erreur : ' + error.message); return; }
+  await chargerPreinscriptions();
+}
 // ============================================
 // CLASSES
 // ============================================
@@ -1064,7 +1162,8 @@ async function chargerClasses() {
         </div>
         <div style="font-size:12px;color:#888;margin-bottom:10px">Prof principal : ${c.utilisateurs ? `${c.utilisateurs.prenom} ${c.utilisateurs.nom}` : 'Non défini'}</div>
         <div style="display:flex;gap:6px">
-          <button class="btn-sm">Voir les élèves</button>
+          <button class="btn-sm" onclick="voirDetailClasse('${c.id}','${c.nom}')">👥 Élèves</button>
+          <button class="btn-sm" onclick="voirEmploiTemps('${c.id}','${c.nom}')">📅 Emploi du temps</button>
           <button class="btn-sm btn-danger" onclick="supprimerClasse('${c.id}','${c.nom}')">Supprimer</button>
         </div>
       </div>`).join('');
@@ -1072,7 +1171,144 @@ async function chargerClasses() {
   document.getElementById('load-classes').style.display = 'none';
   document.getElementById('cont-classes').style.display = 'block';
 }
+async function voirDetailClasse(classeId, classeNom) {
+  var { data: eleves } = await db.from('eleves')
+    .select('id,nom,prenom,numero_matricule,telephone,statut')
+    .eq('classe_id', classeId).order('nom');
+  eleves = eleves || [];
 
+  var elevesHtml = eleves.length === 0
+    ? '<div style="text-align:center;padding:20px;color:#aaa">Aucun élève dans cette classe</div>'
+    : eleves.map(function(e, i) {
+        var colors = ['#E6F1FB','#E1F5EE','#EEEDFE','#FAEEDA','#FCEBEB'];
+        var tcolors = ['#0C447C','#085041','#3C3489','#633806','#791F1F'];
+        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f5f5f0">' +
+          '<div style="display:flex;align-items:center;gap:8px">' +
+          '<div class="ava" style="background:' + colors[i%5] + ';color:' + tcolors[i%5] + '">' + (e.prenom?.[0]||'') + (e.nom?.[0]||'') + '</div>' +
+          '<div><div style="font-weight:500;font-size:13px">' + (e.prenom||'') + ' ' + e.nom + '</div>' +
+          '<div style="font-size:11px;color:#999">' + (e.numero_matricule||'—') + '</div></div>' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:8px">' +
+          '<span style="font-size:11px;color:#888">' + (e.telephone||'—') + '</span>' +
+          '<span class="badge ' + (e.statut==='actif'?'badge-ok':'badge-err') + '">' + (e.statut||'—') + '</span>' +
+          '</div></div>';
+      }).join('');
+
+  document.getElementById('modal-content').innerHTML =
+    '<div class="modal-title">👥 ' + classeNom + ' — ' + eleves.length + ' élève(s)</div>' +
+    '<div style="max-height:400px;overflow-y:auto">' + elevesHtml + '</div>' +
+    '<div class="modal-actions"><button class="btn btn-primary" onclick="fermerModal()">Fermer</button></div>';
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+async function voirEmploiTemps(classeId, classeNom) {
+  var { data: cours } = await db.from('cours_assignes')
+    .select('id, heures_semaine, matieres(nom,coefficient), utilisateurs(nom,prenom)')
+    .eq('classe_id', classeId);
+  cours = cours || [];
+
+  var { data: creneaux } = await db.from('emploi_du_temps')
+    .select('*, cours_assignes(matieres(nom), utilisateurs(nom,prenom))')
+    .eq('classe_id', classeId)
+    .order('jour').order('heure_debut');
+  creneaux = creneaux || [];
+
+  var jours = ['lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+  var joursLabel = { lundi:'Lundi', mardi:'Mardi', mercredi:'Mercredi', jeudi:'Jeudi', vendredi:'Vendredi', samedi:'Samedi' };
+  var totalHeures = cours.reduce(function(s,c) { return s + Number(c.heures_semaine||0); }, 0);
+
+  // Grouper créneaux par jour
+  var parJour = {};
+  creneaux.forEach(function(cr) {
+    if (!parJour[cr.jour]) parJour[cr.jour] = [];
+    parJour[cr.jour].push(cr);
+  });
+
+  var edtHtml = jours.map(function(j) {
+    var liste = parJour[j] || [];
+    return '<div style="margin-bottom:12px">' +
+      '<div style="font-size:12px;font-weight:700;color:#185FA5;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;padding:4px 8px;background:#E6F1FB;border-radius:6px">' + joursLabel[j] + '</div>' +
+      (liste.length === 0
+        ? '<div style="font-size:11px;color:#ddd;padding:4px 8px">—</div>'
+        : liste.map(function(cr) {
+            return '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:#f9faf9;border-radius:8px;margin-bottom:4px">' +
+              '<div><div style="font-size:12px;font-weight:600">' + (cr.cours_assignes?.matieres?.nom||'—') + '</div>' +
+              '<div style="font-size:11px;color:#888">👩‍🏫 ' + (cr.cours_assignes?.utilisateurs?.prenom||'') + ' ' + (cr.cours_assignes?.utilisateurs?.nom||'') + (cr.salle ? ' · 🚪 ' + cr.salle : '') + '</div></div>' +
+              '<div style="text-align:right">' +
+              '<span style="font-size:12px;font-weight:700;color:#085041;background:#E1F5EE;padding:2px 8px;border-radius:8px">' + cr.heure_debut.substring(0,5) + ' – ' + cr.heure_fin.substring(0,5) + '</span>' +
+              '</div>' +
+              '<button onclick="supprimerCreneau(\'' + cr.id + '\',\'' + classeId + '\',\'' + classeNom + '\')" style="background:none;border:none;cursor:pointer;color:#F09595;font-size:14px;margin-left:6px">✕</button>' +
+              '</div>';
+          }).join('')) +
+      '</div>';
+  }).join('');
+
+  // Options cours pour le formulaire
+  var coursOpts = cours.map(function(c) {
+    return '<option value="' + c.id + '">' + (c.matieres?.nom||'—') + ' — ' + (c.utilisateurs?.prenom||'') + ' ' + (c.utilisateurs?.nom||'') + '</option>';
+  }).join('');
+
+  var joursOpts = jours.map(function(j) {
+    return '<option value="' + j + '">' + joursLabel[j] + '</option>';
+  }).join('');
+
+  document.getElementById('modal-content').innerHTML =
+    '<div class="modal-title">📅 Emploi du temps — ' + classeNom + '</div>' +
+    '<div style="background:#E6F1FB;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;justify-content:space-between">' +
+    '<span style="font-size:13px;color:#0C447C;font-weight:600">Total assigné : ' + totalHeures + 'h/sem</span>' +
+    '<span style="font-size:12px;color:#888">' + creneaux.length + ' créneau(x)</span>' +
+    '</div>' +
+
+    // Formulaire ajout créneau
+    '<div style="background:#f9f9f9;border-radius:10px;padding:12px;margin-bottom:14px">' +
+    '<div style="font-size:12px;font-weight:700;color:#555;margin-bottom:8px">➕ Ajouter un créneau</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">' +
+    '<select id="edt-cours" style="padding:8px;border:1px solid #ddd;border-radius:6px;font-size:12px"><option value="">Matière...</option>' + coursOpts + '</select>' +
+    '<select id="edt-jour" style="padding:8px;border:1px solid #ddd;border-radius:6px;font-size:12px">' + joursOpts + '</select>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">' +
+    '<div><label style="font-size:11px;color:#888;display:block;margin-bottom:2px">Début</label><input type="time" id="edt-debut" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:12px"/></div>' +
+    '<div><label style="font-size:11px;color:#888;display:block;margin-bottom:2px">Fin</label><input type="time" id="edt-fin" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:12px"/></div>' +
+    '<div><label style="font-size:11px;color:#888;display:block;margin-bottom:2px">Salle</label><input type="text" id="edt-salle" placeholder="Ex: A12" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:12px"/></div>' +
+    '</div>' +
+    '<button onclick="ajouterCreneau(\'' + classeId + '\',\'' + classeNom + '\')" style="width:100%;padding:8px;background:#185FA5;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">✅ Ajouter ce créneau</button>' +
+    '</div>' +
+
+    // Grille EDT
+    '<div style="max-height:350px;overflow-y:auto">' + edtHtml + '</div>' +
+    '<div class="modal-actions"><button class="btn btn-primary" onclick="fermerModal()">Fermer</button></div>';
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+async function ajouterCreneau(classeId, classeNom) {
+  var coursId = document.getElementById('edt-cours').value;
+  var jour = document.getElementById('edt-jour').value;
+  var debut = document.getElementById('edt-debut').value;
+  var fin = document.getElementById('edt-fin').value;
+  var salle = document.getElementById('edt-salle').value.trim();
+
+  if (!coursId || !jour || !debut || !fin) { alert('Remplissez tous les champs obligatoires.'); return; }
+  if (debut >= fin) { alert('L\'heure de fin doit être après l\'heure de début.'); return; }
+
+  var res = await db.from('emploi_du_temps').insert([{
+    ecole_id: ecoleId,
+    classe_id: classeId,
+    cours_assigne_id: coursId,
+    jour: jour,
+    heure_debut: debut,
+    heure_fin: fin,
+    salle: salle || null
+  }]);
+
+  if (res.error) { alert('Erreur : ' + res.error.message); return; }
+  await voirEmploiTemps(classeId, classeNom);
+}
+
+async function supprimerCreneau(creneauId, classeId, classeNom) {
+  if (!confirm('Supprimer ce créneau ?')) return;
+  await db.from('emploi_du_temps').delete().eq('id', creneauId);
+  await voirEmploiTemps(classeId, classeNom);
+}
 async function supprimerClasse(id, nom) {
   if (!confirm(`Supprimer la classe "${nom}" ?`)) return;
   await db.from('classes').delete().eq('id', id);
@@ -1196,8 +1432,8 @@ async function genererModalProf() {
     'ℹ️ Un matricule et des identifiants de connexion seront générés automatiquement.' +
     '</div>' +
     '<div class="field-grid">' +
-    '<div class="field"><label>Prénom ✱</label><input id="m-prenom" type="text" placeholder="Mamadou"/></div>' +
-    '<div class="field"><label>Nom ✱</label><input id="m-nom" type="text" placeholder="Diallo"/></div>' +
+    '<div class="field"><label>Prénom ✱</label><input id="m-prenom" type="text" placeholder="Moussa"/></div>' +
+    '<div class="field"><label>Nom ✱</label><input id="m-nom" type="text" placeholder="Sylla"/></div>' +
     '</div>' +
     '<div class="field"><label>Téléphone</label><input id="m-tel" type="tel" placeholder="620 000 000" maxlength="9"/></div>' +
     '<div style="background:#f9f9f9;border-radius:8px;padding:10px 12px;margin-bottom:12px">' +
@@ -1766,7 +2002,11 @@ async function supprimerParent(id, nom) {
 }
 
 async function ajouterEnfantParent(parentId) {
-  var { data: eleves } = await db.from('eleves').select('id,nom,prenom,numero_matricule,classes(nom)').eq('ecole_id', ecoleId).order('nom');
+  // Charger uniquement les élèves sans parent rattaché
+  var { data: tousEleves } = await db.from('eleves').select('id,nom,prenom,numero_matricule,classes(nom)').eq('ecole_id', ecoleId).order('nom');
+  var { data: liensExist } = await db.from('parents_eleves').select('eleve_id');
+  var elevesAvecParent = new Set((liensExist||[]).map(function(l) { return l.eleve_id; }));
+  var eleves = (tousEleves||[]).filter(function(e) { return !elevesAvecParent.has(e.id); });
   _tousElevesSelect = eleves || [];
   var opts = _tousElevesSelect.map(function(e) {
     return '<option value="' + e.id + '">' + (e.prenom||'') + ' ' + e.nom + ' · ' + (e.numero_matricule||'—') + ' (' + (e.classes?.nom||'Sans classe') + ')</option>';
@@ -1905,7 +2145,7 @@ const modalsHTML_DISABLED = {
     <div class="modal-title">👥 Ajouter un élève — NOUVEAU</div>
     <div class="alert alert-err" id="m-err"></div>
     <div class="field-grid">
-      <div class="field"><label>Prénom *</label><input id="m-prenom" type="text" placeholder="Mamadou"/></div>
+      <div class="field"><label>Prénom *</label><input id="m-prenom" type="text" placeholder="Sekouba"/></div>
       <div class="field"><label>Nom *</label><input id="m-nom" type="text" placeholder="Diallo"/></div>
     </div>
     <div class="field-grid">
@@ -2013,10 +2253,13 @@ async function genererModalEleve() {
     </div>`;
 }
 
-async function genererModalParent() {
-  var { data: eleves } = await db.from('eleves').select('id,nom,prenom,classes(nom)').eq('ecole_id', ecoleId).order('nom');
-  var opts = (eleves||[]).map(function(e) {
-    return '<option value="' + e.id + '">' + (e.prenom||'') + ' ' + e.nom + ' (' + (e.classes?.nom||'Sans classe') + ')</option>';
+ async function genererModalParent() {
+  var { data: tousEleves } = await db.from('eleves').select('id,nom,prenom,numero_matricule,classes(nom)').eq('ecole_id', ecoleId).order('nom');
+  var { data: liensExist } = await db.from('parents_eleves').select('eleve_id');
+  var elevesAvecParent = new Set((liensExist||[]).map(function(l) { return l.eleve_id; }));
+  _tousElevesSelect = (tousEleves||[]).filter(function(e) { return !elevesAvecParent.has(e.id); });
+  var opts = _tousElevesSelect.map(function(e) {
+    return '<option value="' + e.id + '">' + (e.prenom||'') + ' ' + e.nom + ' · ' + (e.numero_matricule||'—') + ' (' + (e.classes?.nom||'Sans classe') + ')</option>';
   }).join('');
   document.getElementById('modal-content').innerHTML =
     '<div class="modal-title">👨‍👩‍👧 Ajouter un parent</div>' +
@@ -2025,8 +2268,8 @@ async function genererModalParent() {
     'ℹ️ Un matricule et des identifiants seront générés automatiquement.' +
     '</div>' +
     '<div class="field-grid">' +
-    '<div class="field"><label>Prénom ✱</label><input id="m-prenom" type="text" placeholder="Fatoumata"/></div>' +
-    '<div class="field"><label>Nom ✱</label><input id="m-nom" type="text" placeholder="Bah"/></div>' +
+    '<div class="field"><label>Prénom ✱</label><input id="m-prenom" type="text" placeholder="Sita"/></div>' +
+    '<div class="field"><label>Nom ✱</label><input id="m-nom" type="text" placeholder="Sanoh"/></div>' +
     '</div>' +
     '<div class="field"><label>Téléphone ✱</label><input id="m-tel" type="tel" placeholder="620 000 000" maxlength="9"/></div>' +
     '<div style="background:#f9f9f9;border-radius:8px;padding:10px 12px;margin-bottom:12px">' +
@@ -2059,7 +2302,18 @@ function filtrerEnfantsSelect() {
     sel.innerHTML += '<option value="' + e.id + '">' + (e.prenom||'') + ' ' + e.nom + ' · ' + (e.numero_matricule||'—') + ' (' + (e.classes?.nom||'Sans classe') + ')</option>';
   });
 }
-
+function filtrerEnfantsSelectSimple() {
+  var search = (document.getElementById('m-enfant-search').value || '').toLowerCase();
+  var sel = document.getElementById('m-enfant-id');
+  sel.innerHTML = '<option value="">Choisir...</option>';
+  _tousElevesSelect.filter(function(e) {
+    var nom = ((e.prenom||'') + ' ' + e.nom).toLowerCase();
+    var mat = (e.numero_matricule||'').toLowerCase();
+    return !search || nom.includes(search) || mat.includes(search);
+  }).forEach(function(e) {
+    sel.innerHTML += '<option value="' + e.id + '">' + (e.prenom||'') + ' ' + e.nom + ' · ' + (e.numero_matricule||'—') + ' (' + (e.classes?.nom||'Sans classe') + ')</option>';
+  });
+}
 function ajouterEnfantTemp() {
   var sel = document.getElementById('m-enfant-sel');
   var eleveId = sel.value;

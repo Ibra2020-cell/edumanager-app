@@ -99,6 +99,7 @@
       <div class="nav-item" onclick="showPage('absences',this)"><span class="nav-icon">📌</span> Absences</div>
       <div class="nav-item" onclick="showPage('bulletins',this)"><span class="nav-icon">📄</span> Bulletins</div>
       <div class="nav-item" onclick="showPage('devoirs',this)"><span class="nav-icon">📝</span> Devoirs</div>
+      <div class="nav-item" onclick="showPage('emploidutemps',this)"><span class="nav-icon">🗓️</span> Emploi du temps</div>
       <div class="nav-section">Communication</div>
       <div class="nav-item" onclick="showPage('annonces',this)"><span class="nav-icon">📢</span> Annonces école</div>
       <div class="nav-section">Inscription</div>
@@ -184,6 +185,12 @@
       <div class="page" id="page-devoirs">
         <div id="load-devoirs-parent" class="loading"><div class="spinner"></div>Chargement...</div>
         <div id="cont-devoirs-parent"></div>
+      </div>
+
+      <!-- EMPLOI DU TEMPS -->
+      <div class="page" id="page-emploidutemps">
+        <div id="load-edt-parent" class="loading"><div class="spinner"></div>Chargement...</div>
+        <div id="cont-edt-parent"></div>
       </div>
 
       <!-- ANNONCES -->
@@ -396,6 +403,7 @@ function showPage(id, navEl) {
   if (id === 'bulletins') chargerBulletins();
   if (id === 'annonces') chargerAnnonces();
   if (id === 'devoirs') chargerDevoirsParent();
+  if (id === 'emploidutemps') chargerEmploiDuTempsParent();
   if (id === 'preinscription') chargerPagePreinscription();
 }
 
@@ -545,6 +553,68 @@ async function chargerBulletins() {
     '<div style="font-size:11px;color:#aaa;margin-top:2px">Disponible</div></div>' +
     '<button class="btn btn-primary" style="font-size:12px;padding:6px 12px" onclick="genererBulletinPDF(\'' + enfantActifId + '\')">📄 Télécharger</button>' +
     '</div></div></div>';
+}
+async function chargerEmploiDuTempsParent() {
+  var loadEl = document.getElementById('load-edt-parent');
+  var contEl = document.getElementById('cont-edt-parent');
+  loadEl.style.display = 'block';
+  contEl.innerHTML = '';
+
+  if (!enfantActifId) {
+    loadEl.style.display = 'none';
+    contEl.innerHTML = '<div class="empty"><div class="empty-icon">🗓️</div>Sélectionnez un enfant.</div>';
+    return;
+  }
+
+  var enfant = mesEnfants.find(function(e) { return e.id === enfantActifId; });
+  if (!enfant?.classe_id) {
+    loadEl.style.display = 'none';
+    contEl.innerHTML = '<div class="empty"><div class="empty-icon">🗓️</div>' + (enfant?.prenom||'') + ' n\'est pas encore assigné à une classe.</div>';
+    return;
+  }
+
+  var { data: creneaux } = await db.from('emploi_du_temps')
+    .select('*, cours_assignes(heures_semaine, matieres(nom,coefficient), utilisateurs(nom,prenom))')
+    .eq('classe_id', enfant.classe_id)
+    .order('jour').order('heure_debut');
+  creneaux = creneaux || [];
+  loadEl.style.display = 'none';
+
+  var jours = ['lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+  var joursLabel = { lundi:'Lundi', mardi:'Mardi', mercredi:'Mercredi', jeudi:'Jeudi', vendredi:'Vendredi', samedi:'Samedi' };
+
+  var parJour = {};
+  creneaux.forEach(function(cr) {
+    if (!parJour[cr.jour]) parJour[cr.jour] = [];
+    parJour[cr.jour].push(cr);
+  });
+
+  var html = '<div style="background:#E6F1FB;border-radius:10px;padding:12px 16px;margin-bottom:16px">' +
+    '<div style="font-size:13px;font-weight:700;color:#0C447C">📅 ' + (enfant.classes?.nom||'Classe') + ' — ' + (enfant.prenom||'') + ' ' + enfant.nom + '</div>' +
+    '<div style="font-size:11px;color:#888;margin-top:2px">' + creneaux.length + ' créneau(x) cette semaine</div>' +
+    '</div>';
+
+  if (creneaux.length === 0) {
+    html += '<div class="empty"><div class="empty-icon">🗓️</div>Emploi du temps non encore configuré par l\'école.</div>';
+  } else {
+    html += jours.filter(function(j) { return parJour[j] && parJour[j].length > 0; }).map(function(j) {
+      return '<div style="margin-bottom:14px">' +
+        '<div style="font-size:12px;font-weight:700;color:#185FA5;text-transform:uppercase;padding:4px 10px;background:#E6F1FB;border-radius:6px;margin-bottom:6px">' + joursLabel[j] + '</div>' +
+        parJour[j].map(function(cr) {
+          return '<div style="background:#fff;border:1px solid #e8e8e8;border-radius:10px;padding:12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between">' +
+            '<div style="display:flex;align-items:center;gap:10px">' +
+            '<div style="width:36px;height:36px;border-radius:8px;background:#EEEDFE;display:flex;align-items:center;justify-content:center;font-size:14px">📚</div>' +
+            '<div><div style="font-weight:700;font-size:13px;color:#3C3489">' + (cr.cours_assignes?.matieres?.nom||'—') + '</div>' +
+            '<div style="font-size:11px;color:#888">👩‍🏫 ' + (cr.cours_assignes?.utilisateurs?.prenom||'') + ' ' + (cr.cours_assignes?.utilisateurs?.nom||'') + (cr.salle ? ' · 🚪 ' + cr.salle : '') + '</div></div>' +
+            '</div>' +
+            '<span style="font-size:12px;font-weight:700;color:#085041;background:#E1F5EE;padding:3px 10px;border-radius:10px">' + cr.heure_debut.substring(0,5) + ' – ' + cr.heure_fin.substring(0,5) + '</span>' +
+            '</div>';
+        }).join('') +
+        '</div>';
+    }).join('');
+  }
+
+  contEl.innerHTML = html;
 }
 async function chargerDevoirsParent() {
   var cont = document.getElementById('cont-devoirs-parent');

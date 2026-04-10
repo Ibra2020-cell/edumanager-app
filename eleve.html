@@ -96,6 +96,7 @@
       <div class="nav-item" onclick="showPage('notes',this)"><span class="nav-icon">📊</span> Mes notes</div>
       <div class="nav-item" onclick="showPage('absences',this)"><span class="nav-icon">📌</span> Mes absences</div>
       <div class="nav-item" onclick="showPage('devoirs',this)"><span class="nav-icon">📝</span> Devoirs à rendre</div>
+      <div class="nav-item" onclick="showPage('emploidutemps',this)"><span class="nav-icon">🗓️</span> Emploi du temps</div>
       <div class="nav-item" onclick="showPage('bulletins',this)"><span class="nav-icon">📄</span> Mes bulletins</div>
       <div class="nav-section">École</div>
       <div class="nav-item" onclick="showPage('annonces',this)"><span class="nav-icon">📢</span> Annonces</div>
@@ -179,12 +180,16 @@
         <div id="cont-devoirs"></div>
       </div>
 
+      <!-- EMPLOI DU TEMPS -->
+      <div class="page" id="page-emploidutemps">
+        <div id="load-edt" class="loading"><div class="spinner"></div>Chargement...</div>
+        <div id="cont-edt"></div>
+      </div>
+
       <!-- BULLETINS -->
       <div class="page" id="page-bulletins">
-        <div class="card">
-          <div class="card-title">Mes bulletins scolaires</div>
-          <div id="cont-bulletins"><div class="loading">Chargement...</div></div>
-        </div>
+        <div id="load-bulletins" class="loading"><div class="spinner"></div>Chargement...</div>
+        <div id="cont-bulletins"></div>
       </div>
 
       <!-- ANNONCES -->
@@ -303,6 +308,7 @@ function showPage(id, navEl) {
   if (id === 'bulletins') chargerBulletins();
   if (id === 'annonces') chargerAnnonces();
   if (id === 'avis') chargerAvis();
+  if (id === 'emploidutemps') chargerEmploiDuTemps();
 }
 
 async function chargerDashboard() {
@@ -441,7 +447,64 @@ async function chargerAnnonces() {
         <div style="font-size:11px;color:#aaa;margin-top:6px">${new Date(a.created_at).toLocaleDateString('fr-FR')}</div>
       </div>`).join('');
 }
+async function chargerEmploiDuTemps() {
+  document.getElementById('load-edt').style.display = 'block';
+  document.getElementById('cont-edt').innerHTML = '';
+  if (!eleveId) {
+    document.getElementById('load-edt').innerHTML = '<div class="empty">Profil introuvable.</div>';
+    return;
+  }
+  // Récupérer la classe de l'élève
+  var { data: eleve } = await db.from('eleves').select('classe_id, classes(nom)').eq('id', eleveId).maybeSingle();
+  if (!eleve?.classe_id) {
+    document.getElementById('load-edt').style.display = 'none';
+    document.getElementById('cont-edt').innerHTML = '<div class="empty"><div class="empty-icon">🗓️</div>Vous n\'êtes pas encore assigné à une classe.</div>';
+    return;
+  }
+  // Charger les cours de la classe
+  var { data: creneaux } = await db.from('emploi_du_temps')
+    .select('*, cours_assignes(heures_semaine, matieres(nom,coefficient), utilisateurs(nom,prenom))')
+    .eq('classe_id', eleve.classe_id)
+    .order('jour').order('heure_debut');
+  creneaux = creneaux || [];
+  document.getElementById('load-edt').style.display = 'none';
 
+  var jours = ['lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+  var joursLabel = { lundi:'Lundi', mardi:'Mardi', mercredi:'Mercredi', jeudi:'Jeudi', vendredi:'Vendredi', samedi:'Samedi' };
+
+  var parJour = {};
+  creneaux.forEach(function(cr) {
+    if (!parJour[cr.jour]) parJour[cr.jour] = [];
+    parJour[cr.jour].push(cr);
+  });
+
+  var html = '<div style="background:#E6F1FB;border-radius:10px;padding:12px 16px;margin-bottom:16px">' +
+    '<div style="font-size:13px;font-weight:700;color:#0C447C">📅 ' + (eleve.classes?.nom||'Ma classe') + '</div>' +
+    '<div style="font-size:11px;color:#888;margin-top:2px">' + creneaux.length + ' créneau(x) cette semaine</div>' +
+    '</div>';
+
+  if (creneaux.length === 0) {
+    html += '<div class="empty"><div class="empty-icon">🗓️</div>Emploi du temps non encore configuré.</div>';
+  } else {
+    html += jours.filter(function(j) { return parJour[j] && parJour[j].length > 0; }).map(function(j) {
+      return '<div style="margin-bottom:14px">' +
+        '<div style="font-size:12px;font-weight:700;color:#185FA5;text-transform:uppercase;padding:4px 10px;background:#E6F1FB;border-radius:6px;margin-bottom:6px">' + joursLabel[j] + '</div>' +
+        parJour[j].map(function(cr) {
+          return '<div style="background:#fff;border:1px solid #e8e8e8;border-radius:10px;padding:12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between">' +
+            '<div style="display:flex;align-items:center;gap:10px">' +
+            '<div style="width:36px;height:36px;border-radius:8px;background:#EEEDFE;display:flex;align-items:center;justify-content:center;font-size:14px">📚</div>' +
+            '<div><div style="font-weight:700;font-size:13px;color:#3C3489">' + (cr.cours_assignes?.matieres?.nom||'—') + '</div>' +
+            '<div style="font-size:11px;color:#888">👩‍🏫 ' + (cr.cours_assignes?.utilisateurs?.prenom||'') + ' ' + (cr.cours_assignes?.utilisateurs?.nom||'') + (cr.salle ? ' · 🚪 ' + cr.salle : '') + '</div></div>' +
+            '</div>' +
+            '<span style="font-size:12px;font-weight:700;color:#085041;background:#E1F5EE;padding:3px 10px;border-radius:10px">' + cr.heure_debut.substring(0,5) + ' – ' + cr.heure_fin.substring(0,5) + '</span>' +
+            '</div>';
+        }).join('') +
+        '</div>';
+    }).join('');
+  }
+
+  document.getElementById('cont-edt').innerHTML = html;
+}
 async function chargerAvis() {
   document.getElementById('load-avis').style.display = 'block';
   document.getElementById('cont-avis').innerHTML = '';
