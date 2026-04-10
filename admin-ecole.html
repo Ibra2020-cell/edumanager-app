@@ -222,13 +222,17 @@
 
       <!-- PROFESSEURS -->
       <div class="page" id="page-professeurs">
-        <div class="card">
-          <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
-            <button class="btn btn-primary" onclick="ouvrirModal('prof')">+ Ajouter un professeur</button>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+          <div>
+            <div style="font-size:18px;font-weight:700">Professeurs</div>
+            <div style="font-size:13px;color:#888">Gestion des enseignants</div>
           </div>
+          <button class="btn btn-primary" onclick="genererModalProf()">+ Ajouter un professeur</button>
+        </div>
+        <div class="card">
           <div id="load-profs" class="loading"><div class="spinner"></div>Chargement...</div>
-          <table id="table-profs" style="display:none">
-            <thead><tr><th>Professeur</th><th>Matière</th><th>Téléphone</th><th>Email</th><th>Heures/semaine</th><th>Statut</th></tr></thead>
+          <table id="table-profs" style="display:none;width:100%">
+            <thead><tr><th>Professeur</th><th>Matricule</th><th>Cours assignés</th><th>Téléphone</th><th>Statut</th><th>Actions</th></tr></thead>
             <tbody id="tbody-profs"></tbody>
           </table>
         </div>
@@ -300,11 +304,11 @@
       <!-- HEURES PROFS -->
       <div class="page" id="page-heures">
         <div class="card">
-          <div class="card-title">Suivi des heures effectuées par les professeurs</div>
+          <div class="card-title">Cours assignés & heures par semaine</div>
           <div id="load-heures" class="loading"><div class="spinner"></div>Chargement...</div>
           <div id="cont-heures" style="display:none">
             <table>
-              <thead><tr><th>Professeur</th><th>Matière</th><th>Classe</th><th>Heures ce mois</th><th>Heures totales</th><th>Détails</th></tr></thead>
+              <thead><tr><th>Professeur</th><th>Cours assignés</th><th>Heures/semaine</th><th>Téléphone</th><th>Actions</th></tr></thead>
               <tbody id="tbody-heures"></tbody>
             </table>
           </div>
@@ -504,7 +508,7 @@ const pageMeta = {
   eleves:         ['Élèves', 'Gestion des élèves inscrits', '+ Ajouter un élève', 'eleve'],
   preinscriptions:['Pré-inscriptions', 'Dossiers en attente', '', ''],
   classes:        ['Classes', 'Système scolaire guinéen', '+ Créer une classe', 'classe'],
-  professeurs:    ['Professeurs', 'Enseignants de votre école', '+ Ajouter un prof', 'prof'],
+  professeurs:    ['Professeurs', 'Enseignants de votre école', '', ''],
   matieres:       ['Matières', 'Disciplines enseignées', '+ Ajouter une matière', 'matiere'],
   notes:          ['Notes & bulletins', 'Résultats scolaires', '', ''],
   absences:       ['Absences', 'Appel et gestion des présences', '', ''],
@@ -530,6 +534,7 @@ async function showPage(id, navEl) {
   if (id === 'preinscriptions') await chargerPreinscriptions();
   if (id === 'classes') await chargerClasses();
   if (id === 'professeurs') await chargerProfesseurs();
+  if (id === 'professeurs') { const b = document.getElementById('action-btn'); b.textContent = '+ Ajouter un professeur'; b.style.display = ''; b.onclick = genererModalProf; }
   if (id === 'matieres') await chargerMatieres();
   if (id === 'notes') await preparerNotes();
   if (id === 'absences') await preparerAbsences();
@@ -990,24 +995,270 @@ async function chargerProfesseurs() {
   document.getElementById('load-profs').style.display = 'block';
   document.getElementById('table-profs').style.display = 'none';
   if (!ecoleId) return;
-  const { data } = await db.from('utilisateurs').select('*').eq('ecole_id', ecoleId).eq('role', 'professeur');
-  tousProfs = data || [];
+
+  // Charger profs + leurs cours assignés
+  const { data: profs } = await db.from('utilisateurs')
+    .select('*')
+    .eq('ecole_id', ecoleId)
+    .eq('role', 'professeur')
+    .order('nom');
+  tousProfs = profs || [];
+
+  // Charger cours assignés pour tous les profs
+  const profsIds = tousProfs.map(p => p.id);
+  var coursParProf = {};
+  if (profsIds.length > 0) {
+    const { data: cours } = await db.from('cours_assignes')
+      .select('prof_id, classes(nom), matieres(nom)')
+      .in('prof_id', profsIds);
+    (cours||[]).forEach(function(c) {
+      if (!coursParProf[c.prof_id]) coursParProf[c.prof_id] = [];
+      coursParProf[c.prof_id].push((c.matieres?.nom||'—') + ' / ' + (c.classes?.nom||'—'));
+    });
+  }
+
   document.getElementById('load-profs').style.display = 'none';
   document.getElementById('table-profs').style.display = 'table';
   document.getElementById('tbody-profs').innerHTML = tousProfs.length === 0
     ? '<tr><td colspan="6" style="text-align:center;padding:24px;color:#aaa">Aucun professeur enregistré</td></tr>'
-    : tousProfs.map(p => `
-      <tr>
-        <td><div style="display:flex;align-items:center;gap:8px">
-          <div class="ava" style="background:#E1F5EE;color:#085041">${(p.prenom?.[0]||'')+(p.nom?.[0]||'')}</div>
-          <div style="font-weight:500">${p.prenom} ${p.nom}</div>
-        </div></td>
-        <td style="color:#888;font-size:12px">—</td>
-        <td style="font-size:12px;color:#888">${p.telephone||'—'}</td>
-        <td style="font-size:12px;color:#888">${p.email}</td>
-        <td style="color:#888">—</td>
-        <td><span class="badge ${p.actif?'badge-ok':'badge-err'}">${p.actif?'Actif':'Inactif'}</span></td>
-      </tr>`).join('');
+    : tousProfs.map(function(p, i) {
+        var cours = coursParProf[p.id] || [];
+        var coursHtml = cours.length === 0
+          ? '<span style="color:#aaa;font-size:11px">Aucun cours</span>'
+          : cours.map(function(c) {
+              return '<span style="background:#E1F5EE;color:#085041;padding:2px 6px;border-radius:4px;font-size:11px;margin:1px;display:inline-block">' + c + '</span>';
+            }).join('');
+        var colors = ['#E6F1FB','#E1F5EE','#EEEDFE','#FAEEDA','#FCEBEB'];
+        var tcolors = ['#0C447C','#085041','#3C3489','#633806','#791F1F'];
+        return '<tr>' +
+          '<td><div style="display:flex;align-items:center;gap:8px">' +
+          '<div class="ava" style="background:' + colors[i%5] + ';color:' + tcolors[i%5] + '">' + (p.prenom?.[0]||'') + (p.nom?.[0]||'') + '</div>' +
+          '<div><div style="font-weight:500">' + (p.prenom||'') + ' ' + p.nom + '</div>' +
+          '<div style="font-size:11px;color:#999">' + (p.telephone||'—') + '</div></div>' +
+          '</div></td>' +
+          '<td style="font-size:12px;font-family:monospace;color:#555">' + (p.numero_matricule||'—') + '</td>' +
+          '<td style="max-width:200px">' + coursHtml + '</td>' +
+          '<td style="font-size:12px;color:#888">' + (p.telephone||'—') + '</td>' +
+          '<td><span class="badge ' + (p.actif?'badge-ok':'badge-err') + '">' + (p.actif?'Actif':'Inactif') + '</span></td>' +
+          '<td><div style="display:flex;gap:4px">' +
+          '<button class="btn-sm" onclick="modifierProf(\'' + p.id + '\')">Modifier</button>' +
+          '<button class="btn-sm btn-danger" onclick="supprimerProf(\'' + p.id + '\',\'' + p.prenom + ' ' + p.nom + '\')">✕</button>' +
+          '</div></td>' +
+          '</tr>';
+      }).join('');
+}
+
+async function genererModalProf() {
+  if (toutesClasses.length === 0 && ecoleId) {
+    const { data } = await db.from('classes').select('id,nom').eq('ecole_id', ecoleId).order('nom');
+    toutesClasses = data || [];
+  }
+  var { data: matieres } = await db.from('matieres').select('id,nom').eq('ecole_id', ecoleId).order('nom');
+  matieres = matieres || [];
+
+  var classesOpts = toutesClasses.map(function(c) {
+    return '<option value="' + c.id + '">' + c.nom + '</option>';
+  }).join('');
+  var matieresOpts = matieres.map(function(m) {
+    return '<option value="' + m.id + '">' + m.nom + '</option>';
+  }).join('');
+
+  document.getElementById('modal-content').innerHTML =
+    '<div class="modal-title">👩‍🏫 Ajouter un professeur</div>' +
+    '<div class="alert alert-err" id="m-err"></div>' +
+    '<div style="background:#E6F1FB;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#0C447C;border-left:3px solid #185FA5">' +
+    'ℹ️ Un matricule et des identifiants de connexion seront générés automatiquement.' +
+    '</div>' +
+    '<div class="field-grid">' +
+    '<div class="field"><label>Prénom ✱</label><input id="m-prenom" type="text" placeholder="Mamadou"/></div>' +
+    '<div class="field"><label>Nom ✱</label><input id="m-nom" type="text" placeholder="Diallo"/></div>' +
+    '</div>' +
+    '<div class="field"><label>Téléphone</label><input id="m-tel" type="tel" placeholder="620 000 000" maxlength="9"/></div>' +
+    '<div style="background:#f9f9f9;border-radius:8px;padding:10px 12px;margin-bottom:12px">' +
+    '<div style="font-size:12px;font-weight:600;color:#555;margin-bottom:8px">📚 Assigner des cours (optionnel)</div>' +
+    '<div style="display:flex;gap:8px;margin-bottom:6px">' +
+    '<select id="m-cours-classe" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:12px"><option value="">Classe...</option>' + classesOpts + '</select>' +
+    '<select id="m-cours-matiere" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:12px"><option value="">Matière...</option>' + matieresOpts + '</select>' +
+    '<button onclick="ajouterCoursTemp()" style="padding:8px 12px;background:#E1F5EE;color:#085041;border:1px solid #A8DFC9;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap">+ Ajouter</button>' +
+    '</div>' +
+    '<div id="cours-temp-list" style="display:flex;flex-wrap:wrap;gap:4px"></div>' +
+    '</div>' +
+    '<div class="modal-actions">' +
+    '<button class="btn" onclick="fermerModal()">Annuler</button>' +
+    '<button class="btn btn-primary" onclick="sauvegarderProf()">✓ Ajouter et créer le compte</button>' +
+    '</div>';
+  document.getElementById('modal-bg').classList.add('open');
+  window._coursTemp = [];
+}
+
+function ajouterCoursTemp() {
+  var classeId = document.getElementById('m-cours-classe').value;
+  var classeNom = document.getElementById('m-cours-classe').options[document.getElementById('m-cours-classe').selectedIndex].text;
+  var matiereId = document.getElementById('m-cours-matiere').value;
+  var matiereNom = document.getElementById('m-cours-matiere').options[document.getElementById('m-cours-matiere').selectedIndex].text;
+  if (!classeId || !matiereId) return;
+  var key = classeId + '_' + matiereId;
+  if (window._coursTemp.find(function(c) { return c.key === key; })) return;
+  window._coursTemp.push({ key: key, classe_id: classeId, matiere_id: matiereId, label: matiereNom + ' / ' + classeNom });
+  document.getElementById('cours-temp-list').innerHTML = window._coursTemp.map(function(c) {
+    return '<span style="background:#E1F5EE;color:#085041;padding:3px 8px;border-radius:4px;font-size:11px;display:inline-flex;align-items:center;gap:4px">' +
+      c.label + '<span onclick="retirerCoursTemp(\'' + c.key + '\')" style="cursor:pointer;font-weight:bold;color:#A32D2D">✕</span></span>';
+  }).join('');
+}
+
+function retirerCoursTemp(key) {
+  window._coursTemp = window._coursTemp.filter(function(c) { return c.key !== key; });
+  document.getElementById('cours-temp-list').innerHTML = window._coursTemp.map(function(c) {
+    return '<span style="background:#E1F5EE;color:#085041;padding:3px 8px;border-radius:4px;font-size:11px;display:inline-flex;align-items:center;gap:4px">' +
+      c.label + '<span onclick="retirerCoursTemp(\'' + c.key + '\')" style="cursor:pointer;font-weight:bold;color:#A32D2D">✕</span></span>';
+  }).join('');
+}
+
+async function sauvegarderProf() {
+  var prenom = document.getElementById('m-prenom').value.trim();
+  var nom = document.getElementById('m-nom').value.trim();
+  var tel = document.getElementById('m-tel').value.trim();
+  if (!prenom || !nom) { showModalErr('Prénom et nom obligatoires.'); return; }
+
+  // Récupérer code école
+  if (!codeEcole && ecoleId) {
+    var resEcole = await db.from('ecoles').select('code_acces').eq('id', ecoleId).single();
+    if (resEcole.data) codeEcole = resEcole.data.code_acces;
+  }
+
+  // Générer matricule
+  var { count } = await db.from('utilisateurs').select('id', { count: 'exact' }).eq('ecole_id', ecoleId).eq('role', 'professeur');
+  var mat = genererMatriculeProfesseur(codeEcole, new Date().getFullYear(), (count||0) + 1);
+
+  var emailInterne = genererEmail(mat, codeEcole);
+  var mdpTemp = genererMotDePasse(mat);
+
+  // Créer compte Auth
+  var authRes = await fetch('https://rcojerlzguwqpclyudjo.supabase.co/auth/v1/signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjb2plcmx6Z3V3cXBjbHl1ZGpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NTg1MzIsImV4cCI6MjA5MTAzNDUzMn0.4R_NOrYLdhkVMKw87Z33FLS9LoAUAgVj_Uk_RBCf8tg' },
+    body: JSON.stringify({ email: emailInterne, password: mdpTemp })
+  }).then(function(r) { return r.json(); });
+
+  var authId = authRes.user ? authRes.user.id : (authRes.id || null);
+  if (!authId) { showModalErr('Erreur création compte : ' + (authRes.msg || authRes.message || authRes.error_description || JSON.stringify(authRes))); return; }
+
+  // Insérer dans utilisateurs
+  var res = await db.from('utilisateurs').insert([{
+    id: authId,
+    nom: nom, prenom: prenom,
+    role: 'professeur',
+    ecole_id: ecoleId,
+    actif: true,
+    compte_active: true,
+    numero_matricule: mat,
+    email: emailInterne,
+    telephone: tel ? '+224' + tel : null,
+    auth_id: authId,
+    mdp_temp: mdpTemp,
+    premiere_connexion: true
+  }]);
+  if (res.error) { showModalErr(res.error.message); return; }
+
+  // Assigner cours
+  if (window._coursTemp && window._coursTemp.length > 0) {
+    await db.from('cours_assignes').insert(window._coursTemp.map(function(c) {
+      return { ecole_id: ecoleId, prof_id: authId, classe_id: c.classe_id, matiere_id: c.matiere_id };
+    }));
+  }
+
+  fermerModal();
+  alert('✅ ' + prenom + ' ' + nom + ' ajouté(e) !\n\n📋 IDENTIFIANTS DE CONNEXION :\n─────────────────────────\nMatricule : ' + mat + '\nMot de passe : ' + mdpTemp + '\n─────────────────────────\n⚠️ Donnez ces identifiants au professeur.\nIl devra changer son mot de passe à la première connexion.');
+  chargerProfesseurs();
+}
+
+async function modifierProf(id) {
+  var prof = tousProfs.find(function(p) { return p.id === id; });
+  if (!prof) return;
+  if (toutesClasses.length === 0 && ecoleId) {
+    var rc = await db.from('classes').select('id,nom').eq('ecole_id', ecoleId).order('nom');
+    toutesClasses = rc.data || [];
+  }
+  var { data: matieres } = await db.from('matieres').select('id,nom').eq('ecole_id', ecoleId).order('nom');
+  matieres = matieres || [];
+  var { data: coursExist } = await db.from('cours_assignes')
+    .select('id, classe_id, matiere_id, classes(nom), matieres(nom)')
+    .eq('prof_id', id);
+  coursExist = coursExist || [];
+
+  var classesOpts = toutesClasses.map(function(c) {
+    return '<option value="' + c.id + '">' + c.nom + '</option>';
+  }).join('');
+  var matieresOpts = matieres.map(function(m) {
+    return '<option value="' + m.id + '">' + m.nom + '</option>';
+  }).join('');
+
+  window._coursTemp = coursExist.map(function(c) {
+    return { key: c.classe_id + '_' + c.matiere_id, classe_id: c.classe_id, matiere_id: c.matiere_id, label: (c.matieres?.nom||'—') + ' / ' + (c.classes?.nom||'—'), existId: c.id };
+  });
+
+  document.getElementById('modal-content').innerHTML =
+    '<div class="modal-title">✏️ Modifier un professeur</div>' +
+    '<div class="alert alert-err" id="m-err"></div>' +
+    '<div style="background:#f9f9f9;border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:12px;color:#888">Matricule : <strong>' + (prof.numero_matricule||'—') + '</strong></div>' +
+    '<div class="field-grid">' +
+    '<div class="field"><label>Prénom ✱</label><input id="m-prenom" type="text" value="' + (prof.prenom||'') + '"/></div>' +
+    '<div class="field"><label>Nom ✱</label><input id="m-nom" type="text" value="' + prof.nom + '"/></div>' +
+    '</div>' +
+    '<div class="field"><label>Téléphone</label><input id="m-tel" type="tel" value="' + ((prof.telephone||'').replace('+224','')) + '" maxlength="9"/></div>' +
+    '<div class="field"><label>Statut</label><select id="m-statut"><option value="true"' + (prof.actif?' selected':'') + '>Actif</option><option value="false"' + (!prof.actif?' selected':'') + '>Inactif</option></select></div>' +
+    '<div style="background:#f9f9f9;border-radius:8px;padding:10px 12px;margin-bottom:12px">' +
+    '<div style="font-size:12px;font-weight:600;color:#555;margin-bottom:8px">📚 Cours assignés</div>' +
+    '<div style="display:flex;gap:8px;margin-bottom:6px">' +
+    '<select id="m-cours-classe" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:12px"><option value="">Classe...</option>' + classesOpts + '</select>' +
+    '<select id="m-cours-matiere" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:12px"><option value="">Matière...</option>' + matieresOpts + '</select>' +
+    '<button onclick="ajouterCoursTemp()" style="padding:8px 12px;background:#E1F5EE;color:#085041;border:1px solid #A8DFC9;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap">+ Ajouter</button>' +
+    '</div>' +
+    '<div id="cours-temp-list">' + window._coursTemp.map(function(c) {
+      return '<span style="background:#E1F5EE;color:#085041;padding:3px 8px;border-radius:4px;font-size:11px;display:inline-flex;align-items:center;gap:4px;margin:1px">' +
+        c.label + '<span onclick="retirerCoursTemp(\'' + c.key + '\')" style="cursor:pointer;font-weight:bold;color:#A32D2D">✕</span></span>';
+    }).join('') + '</div>' +
+    '</div>' +
+    '<div class="modal-actions">' +
+    '<button class="btn" onclick="fermerModal()">Annuler</button>' +
+    '<button class="btn btn-primary" onclick="sauvegarderModifProf(\'' + id + '\')">Enregistrer</button>' +
+    '</div>';
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+async function sauvegarderModifProf(id) {
+  var prenom = document.getElementById('m-prenom').value.trim();
+  var nom = document.getElementById('m-nom').value.trim();
+  var tel = document.getElementById('m-tel').value.trim();
+  var actif = document.getElementById('m-statut').value === 'true';
+  if (!prenom || !nom) { showModalErr('Prénom et nom obligatoires.'); return; }
+
+  var res = await db.from('utilisateurs').update({
+    prenom: prenom, nom: nom,
+    telephone: tel ? '+224' + tel : null,
+    actif: actif
+  }).eq('id', id);
+  if (res.error) { showModalErr(res.error.message); return; }
+
+  // Supprimer anciens cours et réinsérer
+  await db.from('cours_assignes').delete().eq('prof_id', id);
+  if (window._coursTemp && window._coursTemp.length > 0) {
+    await db.from('cours_assignes').insert(window._coursTemp.map(function(c) {
+      return { ecole_id: ecoleId, prof_id: id, classe_id: c.classe_id, matiere_id: c.matiere_id };
+    }));
+  }
+
+  fermerModal();
+  alert('✅ Professeur modifié avec succès !');
+  chargerProfesseurs();
+}
+
+async function supprimerProf(id, nom) {
+  if (!confirm('Supprimer ' + nom + ' ? Tous ses cours assignés seront supprimés.')) return;
+  await db.from('cours_assignes').delete().eq('prof_id', id);
+  var res = await db.from('utilisateurs').delete().eq('id', id);
+  if (res.error) { alert('Erreur : ' + res.error.message); return; }
+  chargerProfesseurs();
 }
 
 // ============================================
@@ -1190,31 +1441,50 @@ async function chargerHeures() {
   document.getElementById('load-heures').style.display = 'block';
   document.getElementById('cont-heures').style.display = 'none';
   if (!ecoleId) return;
-  const { data } = await db.from('heures_profs').select('*, utilisateurs(nom,prenom), classes(nom), matieres(nom)').eq('ecole_id', ecoleId);
+
+  // Charger cours assignés avec heures par semaine
+  var { data: cours } = await db.from('cours_assignes')
+    .select('*, utilisateurs(id,nom,prenom,numero_matricule,telephone), classes(nom), matieres(nom,coefficient)')
+    .eq('ecole_id', ecoleId);
 
   // Grouper par professeur
-  const parProf = {};
-  (data||[]).forEach(h => {
-    const pid = h.professeur_id;
-    if (!parProf[pid]) parProf[pid] = { info: h.utilisateurs, total: 0, mois: 0, details: [] };
-    parProf[pid].total += Number(h.heures);
-    const moisCourant = new Date().getMonth();
-    const moisHeure = new Date(h.date_cours).getMonth();
-    if (moisHeure === moisCourant) parProf[pid].mois += Number(h.heures);
-    parProf[pid].details.push(h);
+  var parProf = {};
+  (cours||[]).forEach(function(c) {
+    var pid = c.prof_id;
+    if (!parProf[pid]) parProf[pid] = {
+      info: c.utilisateurs,
+      cours: [],
+      totalHeuresSemaine: 0
+    };
+    parProf[pid].cours.push(c);
+    parProf[pid].totalHeuresSemaine += Number(c.heures_semaine || 0);
   });
 
-  const html = Object.entries(parProf).length === 0
-    ? '<tr><td colspan="6" style="text-align:center;padding:24px;color:#aaa">Aucune heure enregistrée</td></tr>'
-    : Object.entries(parProf).map(([pid, p]) => `
-      <tr>
-        <td style="font-weight:500">${p.info?.prenom||''} ${p.info?.nom||''}</td>
-        <td style="color:#888;font-size:12px">—</td>
-        <td style="color:#888;font-size:12px">—</td>
-        <td style="font-weight:600;color:#185FA5">${p.mois}h</td>
-        <td style="font-weight:600">${p.total}h</td>
-        <td><button class="btn-sm">Détails</button></td>
-      </tr>`).join('');
+  // Ajouter profs sans cours
+  tousProfs.forEach(function(p) {
+    if (!parProf[p.id]) parProf[p.id] = { info: p, cours: [], totalHeuresSemaine: 0 };
+  });
+
+  var html = Object.keys(parProf).length === 0
+    ? '<tr><td colspan="5" style="text-align:center;padding:24px;color:#aaa">Aucun professeur enregistré</td></tr>'
+    : Object.entries(parProf).map(function([pid, p]) {
+        var coursHtml = p.cours.length === 0
+          ? '<span style="color:#aaa;font-size:11px">Aucun cours assigné</span>'
+          : p.cours.map(function(c) {
+              return '<span style="background:#E1F5EE;color:#085041;padding:2px 6px;border-radius:4px;font-size:11px;margin:1px;display:inline-block">' +
+                (c.matieres?.nom||'—') + ' · ' + (c.classes?.nom||'—') +
+                (c.heures_semaine ? ' (' + c.heures_semaine + 'h/sem)' : '') +
+                '</span>';
+            }).join('');
+        return '<tr>' +
+          '<td><div style="font-weight:500">' + (p.info?.prenom||'') + ' ' + (p.info?.nom||'') + '</div>' +
+          '<div style="font-size:11px;color:#999">' + (p.info?.numero_matricule||'—') + '</div></td>' +
+          '<td style="max-width:250px">' + coursHtml + '</td>' +
+          '<td style="font-weight:600;color:#185FA5;text-align:center">' + (p.totalHeuresSemaine > 0 ? p.totalHeuresSemaine + 'h/sem' : '—') + '</td>' +
+          '<td style="font-size:12px;color:#888">' + (p.info?.telephone||'—') + '</td>' +
+          '<td><button class="btn-sm" onclick="modifierProf(\'' + pid + '\')">Modifier</button></td>' +
+          '</tr>';
+      }).join('');
 
   document.getElementById('tbody-heures').innerHTML = html;
   document.getElementById('load-heures').style.display = 'none';
@@ -1430,29 +1700,6 @@ async function genererModalParent() {
     <div class="modal-actions">
       <button class="btn" onclick="fermerModal()">Annuler</button>
       <button class="btn btn-primary" onclick="sauvegarderParent()">✓ Ajouter</button>
-    </div>`;
-}
-
-async function genererModalProf() {
-  const matricule = await getProchainMatriculeProf();
-  const { data: mats } = await db.from('matieres').select('id,nom').eq('ecole_id', ecoleId);
-  document.getElementById('modal-content').innerHTML = `
-    <div class="modal-title">👩‍🏫 Ajouter un professeur</div>
-    <div class="alert alert-err" id="m-err"></div>
-    <div style="background:#EAF3DE;border-radius:8px;padding:10px 12px;margin-bottom:14px;display:flex;align-items:center;gap:8px">
-      <span style="font-size:12px;color:#3B6D11;">Matricule généré automatiquement :</span>
-      <span class="matricule-badge matricule-generated">${matricule}</span>
-    </div>
-    <div class="field-grid">
-      <div class="field"><label>Prénom *</label><input id="m-prenom" type="text" placeholder="Mamadou"/></div>
-      <div class="field"><label>Nom *</label><input id="m-nom" type="text" placeholder="Barry"/></div>
-    </div>
-    <div class="field"><label>Email *</label><input id="m-email" type="email" placeholder="prof@email.com"/></div>
-    <div class="field"><label>Téléphone (+224)</label><input id="m-tel" type="tel" placeholder="620 000 000"/></div>
-    <input type="hidden" id="m-matricule-prof" value="${matricule}"/>
-    <div class="modal-actions">
-      <button class="btn" onclick="fermerModal()">Annuler</button>
-      <button class="btn btn-primary" onclick="sauvegarderProf()">✓ Ajouter</button>
     </div>`;
 }
 
