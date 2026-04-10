@@ -1460,11 +1460,12 @@ function ajouterCoursTemp() {
   var matiereId = document.getElementById('m-cours-matiere').value;
   var matiereNom = document.getElementById('m-cours-matiere').options[document.getElementById('m-cours-matiere').selectedIndex].text;
   var heures = parseInt(document.getElementById('m-cours-heures')?.value || 0);
+  var coef = parseInt(document.getElementById('m-cours-coef')?.value || 1);
   if (!classeId || !matiereId) return alert('Sélectionnez une classe et une matière.');
   var key = classeId + '_' + matiereId;
   if (window._coursTemp.find(function(c) { return c.key === key; })) return;
-  var label = matiereNom + ' / ' + classeNom + (heures ? ' · ' + heures + 'h/sem' : '');
-  window._coursTemp.push({ key: key, classe_id: classeId, matiere_id: matiereId, heures_semaine: heures, label: label });
+  var label = matiereNom + ' / ' + classeNom + (heures ? ' · ' + heures + 'h/sem' : '') + ' · Coef.' + coef;
+  window._coursTemp.push({ key: key, classe_id: classeId, matiere_id: matiereId, heures_semaine: heures, coefficient: coef, label: label });
   rafraichirCoursTemp();
 }
 
@@ -1529,7 +1530,7 @@ async function sauvegarderProf() {
   // Assigner cours
   if (window._coursTemp && window._coursTemp.length > 0) {
     await db.from('cours_assignes').insert(window._coursTemp.map(function(c) {
-      return { ecole_id: ecoleId, professeur_id: authId, classe_id: c.classe_id, matiere_id: c.matiere_id, heures_semaine: c.heures_semaine || 0 };
+      return { ecole_id: ecoleId, professeur_id: authId, classe_id: c.classe_id, matiere_id: c.matiere_id, heures_semaine: c.heures_semaine || 0, coefficient: c.coefficient || 1 };
     }));
   }
 
@@ -1560,7 +1561,10 @@ async function modifierProf(id) {
   }).join('');
 
   window._coursTemp = coursExist.map(function(c) {
-    return { key: c.classe_id + '_' + c.matiere_id, classe_id: c.classe_id, matiere_id: c.matiere_id, heures_semaine: c.heures_semaine||0, label: (c.matieres?.nom||'—') + ' / ' + (c.classes?.nom||'—') + (c.heures_semaine ? ' · ' + c.heures_semaine + 'h/sem' : ''), existId: c.id };
+    var label = (c.matieres?.nom||'—') + ' / ' + (c.classes?.nom||'—') +
+      (c.heures_semaine ? ' · ' + c.heures_semaine + 'h/sem' : '') +
+      ' · Coef.' + (c.coefficient||1);
+    return { key: c.classe_id + '_' + c.matiere_id, classe_id: c.classe_id, matiere_id: c.matiere_id, heures_semaine: c.heures_semaine||0, coefficient: c.coefficient||1, label: label, existId: c.id };
   });
 
   document.getElementById('modal-content').innerHTML =
@@ -1578,7 +1582,8 @@ async function modifierProf(id) {
     '<div style="display:flex;gap:8px;margin-bottom:6px">' +
     '<select id="m-cours-classe" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:12px"><option value="">Classe...</option>' + classesOpts + '</select>' +
     '<select id="m-cours-matiere" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:12px"><option value="">Matière...</option>' + matieresOpts + '</select>' +
-    '<input id="m-cours-heures" type="number" min="1" max="40" placeholder="h/sem" style="width:70px;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:12px"/>' +
+    '<input id="m-cours-heures" type="number" min="1" max="40" placeholder="h/sem" style="width:60px;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:12px"/>' +
+    '<input id="m-cours-coef" type="number" min="1" max="10" placeholder="coef" style="width:55px;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:12px"/>' +
     '<button onclick="ajouterCoursTemp()" style="padding:8px 12px;background:#E1F5EE;color:#085041;border:1px solid #A8DFC9;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap">+ Ajouter</button>' +
     '</div>' +
     '<div id="cours-temp-list">' + window._coursTemp.map(function(c) {
@@ -1611,7 +1616,7 @@ async function sauvegarderModifProf(id) {
   await db.from('cours_assignes').delete().eq('professeur_id', id);
   if (window._coursTemp && window._coursTemp.length > 0) {
     await db.from('cours_assignes').insert(window._coursTemp.map(function(c) {
-      return { ecole_id: ecoleId, professeur_id: id, classe_id: c.classe_id, matiere_id: c.matiere_id, heures_semaine: c.heures_semaine || 0 };
+      return { ecole_id: ecoleId, professeur_id: id, classe_id: c.classe_id, matiere_id: c.matiere_id, heures_semaine: c.heures_semaine || 0, coefficient: c.coefficient || 1 };
     }));
   }
 
