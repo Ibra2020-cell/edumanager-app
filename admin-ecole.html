@@ -1631,23 +1631,134 @@ async function supprimerProf(id, nom) {
 // ============================================
 // MATIÈRES
 // ============================================
+var toutesMatieres = [];
+
 async function chargerMatieres() {
   document.getElementById('load-matieres').style.display = 'block';
   document.getElementById('grid-matieres').style.display = 'none';
   if (!ecoleId) return;
+
   const { data } = await db.from('matieres').select('*').eq('ecole_id', ecoleId).order('nom');
+  toutesMatieres = data || [];
+
+  // Charger les assignations par classe pour chaque matière
+  const { data: assignations } = await db.from('cours_assignes')
+    .select('matiere_id, classe_id, heures_semaine, coefficient, classes(nom)')
+    .eq('ecole_id', ecoleId);
+
+  // Grouper par matiere_id
+  var assignParMatiere = {};
+  (assignations||[]).forEach(function(a) {
+    if (!assignParMatiere[a.matiere_id]) assignParMatiere[a.matiere_id] = [];
+    assignParMatiere[a.matiere_id].push(a);
+  });
+
   const icons = { 'Mathématiques':'📐','Français':'📖','Histoire':'🌍','Sciences':'🔬','Anglais':'🇬🇧','EPS':'⚽','Physique':'⚗️','Chimie':'🧪','Biologie':'🧬','Philosophie':'💭','Informatique':'💻' };
-  document.getElementById('grid-matieres').innerHTML = (data||[]).length === 0
+
+  document.getElementById('grid-matieres').innerHTML = toutesMatieres.length === 0
     ? '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">📚</div>Aucune matière créée.</div>'
-    : (data||[]).map(m => `
-      <div class="card" style="margin-bottom:0">
-        <div style="font-size:24px;margin-bottom:8px">${icons[m.nom]||'📚'}</div>
-        <div style="font-weight:600;margin-bottom:4px">${m.nom}</div>
-        <div style="font-size:12px;color:#888;margin-bottom:4px">Coefficient : ${m.coefficient}</div>
-        <div style="font-size:12px;color:#888">${m.volume_horaire_semaine}h/semaine</div>
-      </div>`).join('');
+    : toutesMatieres.map(function(m) {
+        var assign = assignParMatiere[m.id] || [];
+        var assignHtml = assign.length === 0
+          ? '<div style="font-size:11px;color:#ddd;font-style:italic">Non assignée à une classe</div>'
+          : assign.map(function(a) {
+              return '<div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px solid #f5f5f0">' +
+                '<span style="color:#555">' + (a.classes?.nom||'—') + '</span>' +
+                '<span style="color:#185FA5;font-weight:600">Coef.' + (a.coefficient||m.coefficient||1) + ' · ' + (a.heures_semaine||m.volume_horaire_semaine||0) + 'h/sem</span>' +
+                '</div>';
+            }).join('');
+
+        return '<div class="card" style="margin-bottom:0">' +
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">' +
+          '<div style="font-size:22px">' + (icons[m.nom]||'📚') + '</div>' +
+          '<div style="display:flex;gap:4px">' +
+          '<button class="btn-sm" onclick="modifierMatiere(\'' + m.id + '\')">✏️</button>' +
+          '<button class="btn-sm btn-danger" onclick="supprimerMatiere(\'' + m.id + '\',\'' + m.nom + '\')">✕</button>' +
+          '</div></div>' +
+          '<div style="font-weight:700;font-size:14px;margin-bottom:4px">' + m.nom + '</div>' +
+          '<div style="font-size:11px;color:#888;margin-bottom:8px">Par défaut : Coef.' + (m.coefficient||1) + ' · ' + (m.volume_horaire_semaine||0) + 'h/sem</div>' +
+          '<div style="border-top:1px solid #f0f0f0;padding-top:8px">' +
+          '<div style="font-size:10px;color:#aaa;font-weight:600;text-transform:uppercase;margin-bottom:4px">Par classe</div>' +
+          assignHtml +
+          '</div></div>';
+      }).join('');
+
   document.getElementById('load-matieres').style.display = 'none';
   document.getElementById('grid-matieres').style.display = 'grid';
+}
+
+async function modifierMatiere(id) {
+  var m = toutesMatieres.find(function(x) { return x.id === id; });
+  if (!m) return;
+
+  // Charger les assignations de cette matière
+  var { data: assign } = await db.from('cours_assignes')
+    .select('id, classe_id, heures_semaine, coefficient, classes(nom)')
+    .eq('matiere_id', id)
+    .eq('ecole_id', ecoleId);
+  assign = assign || [];
+
+  var assignHtml = assign.length === 0
+    ? '<div style="font-size:12px;color:#aaa;font-style:italic">Aucune assignation à une classe.</div>'
+    : assign.map(function(a) {
+        return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;padding:6px 8px;background:#f9f9f9;border-radius:6px">' +
+          '<span style="flex:1;font-size:12px;font-weight:600">' + (a.classes?.nom||'—') + '</span>' +
+          '<div style="display:flex;align-items:center;gap:4px">' +
+          '<label style="font-size:11px;color:#888">Coef.</label>' +
+          '<input type="number" min="1" max="10" value="' + (a.coefficient||m.coefficient||1) + '" id="coef-' + a.id + '" style="width:50px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:12px"/>' +
+          '<label style="font-size:11px;color:#888">h/sem</label>' +
+          '<input type="number" min="1" max="40" value="' + (a.heures_semaine||0) + '" id="heures-' + a.id + '" style="width:50px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:12px"/>' +
+          '</div>' +
+          '</div>';
+      }).join('');
+
+  document.getElementById('modal-content').innerHTML =
+    '<div class="modal-title">✏️ Modifier la matière</div>' +
+    '<div class="alert alert-err" id="m-err"></div>' +
+    '<div class="field-grid">' +
+    '<div class="field"><label>Nom ✱</label><input id="m-nom-mat" type="text" value="' + m.nom + '"/></div>' +
+    '<div class="field"><label>Coef. par défaut</label><input id="m-coef-mat" type="number" min="1" max="10" value="' + (m.coefficient||1) + '"/></div>' +
+    '</div>' +
+    '<div class="field"><label>Heures/sem par défaut</label><input id="m-vh-mat" type="number" min="1" max="40" value="' + (m.volume_horaire_semaine||0) + '"/></div>' +
+    '<div style="margin-bottom:12px">' +
+    '<div style="font-size:12px;font-weight:600;color:#555;margin-bottom:8px">⚙️ Coef. et heures par classe :</div>' +
+    assignHtml +
+    '</div>' +
+    '<div class="modal-actions">' +
+    '<button class="btn" onclick="fermerModal()">Annuler</button>' +
+    '<button class="btn btn-primary" onclick="sauvegarderModifMatiere(\'' + id + '\',' + JSON.stringify(assign.map(function(a){return a.id;})) + ')">Enregistrer</button>' +
+    '</div>';
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+async function sauvegarderModifMatiere(id, assignIds) {
+  var nom = document.getElementById('m-nom-mat').value.trim();
+  var coef = parseInt(document.getElementById('m-coef-mat').value) || 1;
+  var vh = parseInt(document.getElementById('m-vh-mat').value) || 0;
+  if (!nom) { showModalErr('Nom obligatoire.'); return; }
+
+  // Mettre à jour la matière
+  var res = await db.from('matieres').update({ nom: nom, coefficient: coef, volume_horaire_semaine: vh }).eq('id', id);
+  if (res.error) { showModalErr(res.error.message); return; }
+
+  // Mettre à jour chaque assignation
+  for (var i = 0; i < assignIds.length; i++) {
+    var aId = assignIds[i];
+    var newCoef = parseInt(document.getElementById('coef-' + aId)?.value) || coef;
+    var newHeures = parseInt(document.getElementById('heures-' + aId)?.value) || 0;
+    await db.from('cours_assignes').update({ coefficient: newCoef, heures_semaine: newHeures }).eq('id', aId);
+  }
+
+  fermerModal();
+  alert('✅ Matière mise à jour !');
+  chargerMatieres();
+}
+
+async function supprimerMatiere(id, nom) {
+  if (!confirm('Supprimer la matière "' + nom + '" ? Elle sera retirée de tous les cours assignés.')) return;
+  await db.from('cours_assignes').delete().eq('matiere_id', id);
+  await db.from('matieres').delete().eq('id', id);
+  chargerMatieres();
 }
 
 // ============================================
