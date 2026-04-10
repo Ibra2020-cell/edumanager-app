@@ -999,7 +999,29 @@ async function sauvegarderParent() {
   chargerParents();
 }
 async function supprimerEleve(id, nom) {
-  if (!confirm('Supprimer ' + nom + ' et toutes ses données (notes, absences, parents) ?')) return;
+  document.getElementById('modal-content').innerHTML =
+    '<div style="text-align:center;padding:10px 0">' +
+    '<div style="font-size:48px;margin-bottom:12px">⚠️</div>' +
+    '<div style="font-size:16px;font-weight:700;color:#791F1F;margin-bottom:8px">Suppression définitive</div>' +
+    '<div style="font-size:13px;color:#555;margin-bottom:16px">Vous allez supprimer <strong>' + nom + '</strong> et toutes ses données :<br><br>' +
+    '<div style="background:#FCEBEB;border-radius:8px;padding:10px;text-align:left;font-size:12px;color:#791F1F">' +
+    '🗑️ Compte de connexion<br>' +
+    '🗑️ Notes et bulletins<br>' +
+    '🗑️ Absences<br>' +
+    '🗑️ Liens avec les parents<br>' +
+    '🗑️ Toutes ses données dans l\'application' +
+    '</div><br>' +
+    '<strong style="color:#E24B4A">Cette action est irréversible !</strong>' +
+    '</div>' +
+    '<div class="modal-actions" style="justify-content:center">' +
+    '<button class="btn" onclick="fermerModal()">Annuler</button>' +
+    '<button class="btn" style="background:#E24B4A;color:#fff;border-color:#E24B4A" onclick="confirmerSupprimerEleve(\'' + id + '\')">🗑️ Supprimer définitivement</button>' +
+    '</div></div>';
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+async function confirmerSupprimerEleve(id) {
+  fermerModal();
   const { error } = await db.rpc('supprimer_eleve_complet', { eleve_uuid: id });
   if (error) { alert('Erreur : ' + error.message); return; }
   await chargerEleves();
@@ -1330,7 +1352,7 @@ async function chargerProfesseurs() {
   tousProfs = profs || [];
 
   const { data: cours } = await db.from('cours_assignes')
-    .select('id, professeur_id, classe_id, matiere_id, heures_semaine, classes(nom), matieres(nom)')
+    .select('id, professeur_id, classe_id, matiere_id, heures_semaine, coefficient, classes(nom), matieres(nom)')
     .eq('ecole_id', ecoleId);
 
   if (toutesClasses.length === 0) {
@@ -1388,8 +1410,10 @@ function afficherProfs(liste) {
           return '<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:#f9faf9;border-radius:6px;margin-bottom:4px">' +
             '<div><span style="font-size:12px;font-weight:600;color:#085041">' + (c.matieres?.nom||'—') + '</span>' +
             '<span style="font-size:11px;color:#888;margin-left:6px">· ' + (c.classes?.nom||'—') + '</span></div>' +
-            '<span style="font-size:11px;background:#E1F5EE;color:#085041;padding:2px 8px;border-radius:10px;font-weight:600">' +
-            (c.heures_semaine ? c.heures_semaine + 'h/sem' : '?h/sem') + '</span></div>';
+            '<div style="display:flex;gap:4px">' +
+            '<span style="font-size:11px;background:#E1F5EE;color:#085041;padding:2px 8px;border-radius:10px;font-weight:600">' + (c.heures_semaine ? c.heures_semaine + 'h/sem' : '?h/sem') + '</span>' +
+            '<span style="font-size:11px;background:#EEEDFE;color:#3C3489;padding:2px 8px;border-radius:10px;font-weight:600">Coef.' + (c.coefficient||1) + '</span>' +
+            '</div></div>';
         }).join('');
     return '<div style="background:#fff;border:1px solid #e8e8e8;border-radius:12px;padding:16px;margin-bottom:12px">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">' +
@@ -1626,10 +1650,30 @@ async function sauvegarderModifProf(id) {
 }
 
 async function supprimerProf(id, nom) {
-  if (!confirm('Supprimer ' + nom + ' ? Tous ses cours assignés seront supprimés.')) return;
-  await db.from('cours_assignes').delete().eq('professeur_id', id);
-  var res = await db.from('utilisateurs').delete().eq('id', id);
-  if (res.error) { alert('Erreur : ' + res.error.message); return; }
+  document.getElementById('modal-content').innerHTML =
+    '<div style="text-align:center;padding:10px 0">' +
+    '<div style="font-size:48px;margin-bottom:12px">⚠️</div>' +
+    '<div style="font-size:16px;font-weight:700;color:#791F1F;margin-bottom:8px">Suppression définitive</div>' +
+    '<div style="font-size:13px;color:#555;margin-bottom:16px">Vous allez supprimer <strong>' + nom + '</strong> et toutes ses données :<br><br>' +
+    '<div style="background:#FCEBEB;border-radius:8px;padding:10px;text-align:left;font-size:12px;color:#791F1F">' +
+    '🗑️ Compte de connexion<br>' +
+    '🗑️ Cours assignés<br>' +
+    '🗑️ Notes saisies<br>' +
+    '🗑️ Toutes ses données dans l\'application' +
+    '</div><br>' +
+    '<strong style="color:#E24B4A">Cette action est irréversible !</strong>' +
+    '</div>' +
+    '<div class="modal-actions" style="justify-content:center">' +
+    '<button class="btn" onclick="fermerModal()">Annuler</button>' +
+    '<button class="btn" style="background:#E24B4A;color:#fff;border-color:#E24B4A" onclick="confirmerSupprimerProf(\'' + id + '\',\'' + nom + '\')">🗑️ Supprimer définitivement</button>' +
+    '</div></div>';
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+async function confirmerSupprimerProf(id, nom) {
+  fermerModal();
+  var { error } = await db.rpc('supprimer_utilisateur_complet', { user_uuid: id });
+  if (error) { alert('Erreur : ' + error.message); return; }
   chargerProfesseurs();
 }
 
@@ -2111,9 +2155,29 @@ function afficherParents(liste) {
 }
 
 async function supprimerParent(id, nom) {
-  if (!confirm('Supprimer ' + nom + ' ?')) return;
-  await db.from('parents_eleves').delete().eq('parent_id', id);
-  await db.from('utilisateurs').delete().eq('id', id);
+  document.getElementById('modal-content').innerHTML =
+    '<div style="text-align:center;padding:10px 0">' +
+    '<div style="font-size:48px;margin-bottom:12px">⚠️</div>' +
+    '<div style="font-size:16px;font-weight:700;color:#791F1F;margin-bottom:8px">Suppression définitive</div>' +
+    '<div style="font-size:13px;color:#555;margin-bottom:16px">Vous allez supprimer <strong>' + nom + '</strong> et toutes ses données :<br><br>' +
+    '<div style="background:#FCEBEB;border-radius:8px;padding:10px;text-align:left;font-size:12px;color:#791F1F">' +
+    '🗑️ Compte de connexion<br>' +
+    '🗑️ Liens avec ses enfants<br>' +
+    '🗑️ Toutes ses données dans l\'application' +
+    '</div><br>' +
+    '<strong style="color:#E24B4A">Cette action est irréversible !</strong>' +
+    '</div>' +
+    '<div class="modal-actions" style="justify-content:center">' +
+    '<button class="btn" onclick="fermerModal()">Annuler</button>' +
+    '<button class="btn" style="background:#E24B4A;color:#fff;border-color:#E24B4A" onclick="confirmerSupprimerParent(\'' + id + '\')">🗑️ Supprimer définitivement</button>' +
+    '</div></div>';
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+async function confirmerSupprimerParent(id) {
+  fermerModal();
+  var { error } = await db.rpc('supprimer_utilisateur_complet', { user_uuid: id });
+  if (error) { alert('Erreur : ' + error.message); return; }
   chargerParents();
 }
 
