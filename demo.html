@@ -1,19 +1,93 @@
 <!DOCTYPE html>
 <html lang="fr">
-<head><meta charset="UTF-8"/><title>Démo locale</title></head>
-<body style="font-family:sans-serif;padding:40px;background:#f0f0eb">
-<h2>EduManager — Accès démo local</h2>
-<div style="display:flex;flex-direction:column;gap:10px;max-width:300px;margin-top:20px">
-  <button onclick="go('super_admin','Ibrahima Cissé')" style="padding:12px;background:#1a1a2e;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px">👑 Super Admin</button>
-  <button onclick="go('admin_ecole','Fatima Bangoura')" style="padding:12px;background:#0c2340;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px">🏫 Admin École</button>
-  <button onclick="go('professeur','Mamadou Diallo')" style="padding:12px;background:#1a0a2e;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px">👩‍🏫 Professeur</button>
-  <button onclick="go('parent','Aissatou Bah')" style="padding:12px;background:#0f3d2e;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px">👨‍👩‍👧 Parent</button>
-  <button onclick="go('eleve','Oumar Sow')" style="padding:12px;background:#2a1a00;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px">🎒 Élève</button>
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EduManager — Accès Démo Local</title>
+  <link rel="stylesheet" href="shared-styles.css"/>
+  <style>
+    body { background: var(--bg); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .demo-card { background: var(--white); border-radius: var(--radius-lg); border: 1px solid var(--border); padding: 36px; width: 100%; max-width: 360px; box-shadow: var(--shadow-md); }
+    .demo-header { text-align: center; margin-bottom: 28px; }
+    .demo-header h1 { font-size: 26px; font-weight: 800; letter-spacing: -1px; }
+    .demo-header p { font-size: 13px; color: var(--text-muted); margin-top: 6px; }
+    .demo-badge { display: inline-block; background: var(--accent-orange-light); color: var(--accent-orange); font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 20px; margin-top: 8px; }
+    .demo-btn {
+      display: flex; align-items: center; gap: 12px;
+      width: 100%; padding: 14px 16px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--white);
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      font-family: var(--font);
+      transition: all var(--transition);
+      margin-bottom: 8px;
+      text-align: left;
+    }
+    .demo-btn:hover { background: var(--bg); border-color: var(--accent-blue); transform: translateX(2px); }
+    .demo-btn:last-child { margin-bottom: 0; }
+    .demo-btn .icon { font-size: 20px; width: 28px; text-align: center; }
+    .demo-btn .label { flex: 1; }
+    .demo-btn .role { font-size: 10px; color: var(--text-muted); font-weight: 500; display: block; margin-top: 1px; }
+    .demo-note { margin-top: 20px; font-size: 11px; color: var(--text-muted); text-align: center; background: var(--bg); border-radius: var(--radius); padding: 10px; }
+    .real-login { display: block; text-align: center; margin-top: 14px; font-size: 13px; color: var(--accent-blue); font-weight: 600; text-decoration: none; }
+    .real-login:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+<div class="demo-card">
+  <div class="demo-header">
+    <h1>EduManager 🇬🇳</h1>
+    <p>Accès rapide pour tests locaux</p>
+    <span class="demo-badge">⚠️ Mode démo — Données réelles</span>
+  </div>
+
+  <button class="demo-btn" onclick="go('super_admin','Ibrahima Cissé')">
+    <span class="icon">👑</span>
+    <span class="label">Super Admin<span class="role">Gestion globale de la plateforme</span></span>
+  </button>
+
+  <button class="demo-btn" onclick="go('admin_ecole','Fatima Bangoura')">
+    <span class="icon">🏫</span>
+    <span class="label">Admin École<span class="role">Directeur — Lycée Donka</span></span>
+  </button>
+
+  <button class="demo-btn" onclick="go('professeur','Mamadou Diallo')">
+    <span class="icon">👩‍🏫</span>
+    <span class="label">Professeur<span class="role">Enseignant — Saisie notes & appel</span></span>
+  </button>
+
+  <button class="demo-btn" onclick="go('parent','Aissatou Bah')">
+    <span class="icon">👨‍👩‍👧</span>
+    <span class="label">Parent<span class="role">Suivi des enfants & bulletins</span></span>
+  </button>
+
+  <button class="demo-btn" onclick="go('eleve','Oumar Sow')">
+    <span class="icon">🎒</span>
+    <span class="label">Élève<span class="role">Notes, absences, bulletins PDF</span></span>
+  </button>
+
+  <div class="demo-note">
+    🔒 Ce fichier est exclu du dépôt Git (.gitignore)<br>
+    Utilisation locale uniquement
+  </div>
+
+  <a href="index.html" class="real-login">→ Connexion avec un vrai compte</a>
 </div>
+
 <script>
 function go(role, nom) {
   localStorage.setItem('edu_user', JSON.stringify({ role, nom, demo: true }));
-  const pages = { super_admin:'super-admin.html', admin_ecole:'admin-ecole.html', professeur:'professeur.html', parent:'parent.html', eleve:'eleve.html' };
+  const pages = {
+    super_admin: 'super-admin.html',
+    admin_ecole: 'admin-ecole.html',
+    professeur: 'professeur.html',
+    parent: 'parent.html',
+    eleve: 'eleve.html'
+  };
   window.location.href = pages[role];
 }
 </script>

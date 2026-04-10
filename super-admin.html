@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>EduManager — Super Admin</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="shared-styles.css"/>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f0eb; color: #1a1a1a; }
@@ -128,12 +129,14 @@
   </div>
 
   <div class="main">
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
     <div class="topbar">
       <div class="topbar-left">
         <div class="topbar-title" id="page-title">Tableau de bord</div>
         <div class="topbar-sub" id="page-sub">Chargement des données...</div>
       </div>
-      <div class="topbar-actions">
+      <button class="hamburger" id="hamburger" onclick="toggleSidebar()">☰</button>
+        <div class="topbar-actions">
         <button class="btn btn-primary" onclick="openModal('ecole')">+ Nouvelle école</button>
       </div>
     </div>

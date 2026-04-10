@@ -5,63 +5,61 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>EduManager — Changer mon mot de passe</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="shared-styles.css"/>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f0eb; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
-    .logo { text-align: center; margin-bottom: 32px; }
-    .logo-title { font-size: 28px; font-weight: 800; color: #1a1a1a; }
-    .logo-sub { font-size: 13px; color: #888; margin-top: 4px; }
-    .card { background: #fff; border-radius: 16px; border: 1px solid #e8e8e8; padding: 32px; width: 100%; max-width: 420px; }
-    .card-title { font-size: 18px; font-weight: 700; color: #1a1a1a; margin-bottom: 6px; }
-    .card-sub { font-size: 13px; color: #888; margin-bottom: 24px; }
-    .field { margin-bottom: 16px; }
-    label { font-size: 12px; color: #888; display: block; margin-bottom: 6px; }
-    input { width: 100%; padding: 11px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; color: #1a1a1a; background: #fff; outline: none; font-family: inherit; }
-    input:focus { border-color: #185FA5; box-shadow: 0 0 0 3px #185FA520; }
-    .btn-main { width: 100%; padding: 13px; background: #185FA5; color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
-    .btn-main:hover { background: #1252a0; }
-    .btn-main:disabled { opacity: 0.6; cursor: not-allowed; }
-    .error { background: #FCEBEB; color: #791F1F; border-radius: 8px; padding: 10px 12px; font-size: 12px; margin-bottom: 16px; display: none; border-left: 3px solid #E24B4A; }
-    .success { background: #EAF3DE; color: #27500A; border-radius: 8px; padding: 10px 12px; font-size: 12px; margin-bottom: 16px; display: none; border-left: 3px solid #1D9E75; }
+    body { background: var(--bg); min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
+    .change-card { background: var(--white); border-radius: var(--radius-lg); border: 1px solid var(--border); padding: 36px; width: 100%; max-width: 440px; box-shadow: var(--shadow-md); }
+    .logo-txt { text-align: center; margin-bottom: 32px; }
+    .logo-txt h1 { font-size: 28px; font-weight: 800; letter-spacing: -1px; }
+    .logo-txt p { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+    .card-head { margin-bottom: 24px; }
+    .card-head h2 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+    .card-head p { font-size: 13px; color: var(--text-muted); margin-top: 5px; }
+    .error-msg { background: var(--accent-red-light); color: var(--accent-red); border-radius: var(--radius); padding: 11px 14px; font-size: 12px; margin-bottom: 16px; display: none; border-left: 3px solid var(--accent-red); font-weight: 500; }
+    .success-msg { background: var(--accent-green-light); color: var(--accent-green); border-radius: var(--radius); padding: 11px 14px; font-size: 12px; margin-bottom: 16px; display: none; border-left: 3px solid var(--accent-green); font-weight: 500; }
     .mdp-wrap { position: relative; }
-    .mdp-wrap input { padding-right: 40px; }
-    .eye { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 16px; color: #aaa; background: none; border: none; }
-    .force { height: 4px; border-radius: 4px; background: #f0f0f0; margin-top: 6px; overflow: hidden; }
+    .mdp-wrap input { padding-right: 44px; }
+    .eye { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 16px; color: var(--text-muted); background: none; border: none; }
+    .force { height: 4px; border-radius: 4px; background: var(--border); margin-top: 7px; overflow: hidden; }
     .force-fill { height: 100%; border-radius: 4px; transition: all 0.3s; width: 0; }
-    .force-txt { font-size: 10px; color: #888; margin-top: 3px; }
-    .regle { font-size: 11px; padding: 2px 0; display: flex; align-items: center; gap: 6px; color: #aaa; }
-    .regle.ok { color: #3B6D11; }
-    .regle-dot { width: 6px; height: 6px; border-radius: 50%; background: #ddd; flex-shrink: 0; }
-    .regle.ok .regle-dot { background: #1D9E75; }
-    .info-box { background: #E6F1FB; border-radius: 8px; padding: 12px; margin-bottom: 20px; font-size: 12px; color: #0C447C; border-left: 3px solid #185FA5; }
+    .force-txt { font-size: 11px; color: var(--text-muted); margin-top: 4px; font-weight: 500; }
+    .regle { font-size: 11px; padding: 3px 0; display: flex; align-items: center; gap: 7px; color: var(--text-muted); font-weight: 500; }
+    .regle.ok { color: var(--accent-green); }
+    .regle-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border); flex-shrink: 0; transition: background var(--transition); }
+    .regle.ok .regle-dot { background: var(--accent-green); }
+    .btn-submit { width: 100%; padding: 13px; background: var(--accent-blue); color: #fff; border: none; border-radius: var(--radius); font-size: 14px; font-weight: 700; cursor: pointer; font-family: var(--font); transition: all var(--transition); letter-spacing: -0.2px; }
+    .btn-submit:hover { background: #1450a0; }
+    .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
   </style>
 </head>
 <body>
-<div class="logo">
-  <div class="logo-title">EduManager 🇬🇳</div>
-  <div class="logo-sub">Première connexion</div>
+<div class="logo-txt">
+  <h1>EduManager 🇬🇳</h1>
+  <p>Première connexion — Sécurisez votre compte</p>
 </div>
 
-<div class="card">
-  <div class="card-title">🔐 Créez votre mot de passe</div>
-  <div class="card-sub">Bienvenue ! Choisissez un mot de passe personnel et sécurisé.</div>
-
-  <div class="info-box">
-    Pour votre sécurité, vous devez créer un nouveau mot de passe personnel avant d'accéder à votre espace.
+<div class="change-card">
+  <div class="card-head">
+    <h2>🔐 Créez votre mot de passe</h2>
+    <p>Bienvenue ! Choisissez un mot de passe personnel et sécurisé pour accéder à votre espace.</p>
   </div>
 
-  <div id="err-mdp" class="error"></div>
-  <div id="ok-mdp" class="success"></div>
+  <div class="info-box" style="margin-bottom:20px">
+    ✅ Votre identité a été vérifiée. Définissez maintenant un mot de passe robuste que vous seul connaissez.
+  </div>
+
+  <div id="err-mdp" class="error-msg"></div>
+  <div id="ok-mdp" class="success-msg"></div>
 
   <div class="field">
     <label>Nouveau mot de passe</label>
     <div class="mdp-wrap">
-      <input type="password" id="mdp-new" placeholder="Min. 8 caractères" oninput="checkForce(this.value)"/>
-      <button class="eye" onclick="toggle('mdp-new')">👁</button>
+      <input type="password" id="mdp-new" placeholder="Minimum 8 caractères" oninput="checkForce(this.value)"/>
+      <button class="eye" onclick="toggle('mdp-new')" type="button">👁</button>
     </div>
     <div class="force"><div class="force-fill" id="force-fill"></div></div>
     <div class="force-txt" id="force-txt">Entrez un mot de passe</div>
-    <div id="regles" style="margin-top:6px;display:none">
+    <div id="regles" style="margin-top:8px;display:none">
       <div class="regle" id="r1"><div class="regle-dot"></div>Au moins 8 caractères</div>
       <div class="regle" id="r2"><div class="regle-dot"></div>Au moins une majuscule</div>
       <div class="regle" id="r3"><div class="regle-dot"></div>Au moins un chiffre</div>
@@ -73,110 +71,60 @@
     <label>Confirmer le mot de passe</label>
     <div class="mdp-wrap">
       <input type="password" id="mdp-confirm" placeholder="Répétez votre mot de passe"/>
-      <button class="eye" onclick="toggle('mdp-confirm')">👁</button>
+      <button class="eye" onclick="toggle('mdp-confirm')" type="button">👁</button>
     </div>
   </div>
 
-  <button class="btn-main" id="btn-changer" onclick="changerMdp()">Enregistrer mon mot de passe</button>
+  <button class="btn-submit" id="btn-changer" onclick="changerMdp()">Enregistrer et accéder à mon espace</button>
 </div>
 
+<script src="supabase.js"></script>
 <script>
-const SUPABASE_URL = 'https://rcojerlzguwqpclyudjo.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjb2plcmx6Z3V3cXBjbHl1ZGpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NTg1MzIsImV4cCI6MjA5MTAzNDUzMn0.4R_NOrYLdhkVMKw87Z33FLS9LoAUAgVj_Uk_RBCf8tg';
-const { createClient } = supabase;
-const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+const ROLES = { super_admin:'super-admin.html', admin_ecole:'admin-ecole.html', professeur:'professeur.html', parent:'parent.html', eleve:'eleve.html' };
 
-const ROLES = {
-  super_admin: 'super-admin.html',
-  admin_ecole: 'admin-ecole.html',
-  professeur: 'professeur.html',
-  parent: 'parent.html',
-  eleve: 'eleve.html'
-};
+function toggle(id) { const el=document.getElementById(id); el.type=el.type==='password'?'text':'password'; }
 
-function toggle(id) {
-  var el = document.getElementById(id);
-  el.type = el.type === 'password' ? 'text' : 'password';
-}
-
-function showErr(msg) {
-  var el = document.getElementById('err-mdp');
-  el.textContent = msg; el.style.display = 'block';
-  setTimeout(function() { el.style.display = 'none'; }, 5000);
-}
+function showErr(msg) { const el=document.getElementById('err-mdp'); el.textContent=msg; el.style.display='block'; setTimeout(()=>el.style.display='none',6000); }
 
 function checkForce(mdp) {
-  document.getElementById('regles').style.display = mdp ? 'block' : 'none';
-  var checks = [
-    { id:'r1', ok: mdp.length >= 8 },
-    { id:'r2', ok: /[A-Z]/.test(mdp) },
-    { id:'r3', ok: /[0-9]/.test(mdp) },
-    { id:'r4', ok: /[^A-Za-z0-9]/.test(mdp) }
-  ];
-  var score = 0;
-  checks.forEach(function(c) {
-    var el = document.getElementById(c.id);
-    el.classList.toggle('ok', c.ok);
-    el.querySelector('.regle-dot').style.background = c.ok ? '#1D9E75' : '#ddd';
-    if (c.ok) score++;
-  });
-  var cfg = [
-    null,
-    { w:'25%', c:'#E24B4A', t:'Très faible' },
-    { w:'50%', c:'#EF9F27', t:'Faible' },
-    { w:'75%', c:'#185FA5', t:'Correct' },
-    { w:'100%', c:'#1D9E75', t:'Fort ✓' }
-  ][score] || { w:'0%', c:'#E24B4A', t:'Entrez un mot de passe' };
-  var f = document.getElementById('force-fill');
-  f.style.width = cfg.w; f.style.background = cfg.c;
-  var ft = document.getElementById('force-txt');
-  ft.textContent = cfg.t; ft.style.color = cfg.c;
+  document.getElementById('regles').style.display=mdp?'block':'none';
+  const checks=[{id:'r1',ok:mdp.length>=8},{id:'r2',ok:/[A-Z]/.test(mdp)},{id:'r3',ok:/[0-9]/.test(mdp)},{id:'r4',ok:/[^A-Za-z0-9]/.test(mdp)}];
+  let score=0;
+  checks.forEach(c=>{const el=document.getElementById(c.id);el.classList.toggle('ok',c.ok);el.querySelector('.regle-dot').style.background=c.ok?'var(--accent-green)':'var(--border)';if(c.ok)score++;});
+  const cfg=[null,{w:'25%',c:'var(--accent-red)',t:'Très faible'},{w:'50%',c:'var(--accent-orange)',t:'Faible'},{w:'75%',c:'var(--accent-blue)',t:'Correct'},{w:'100%',c:'var(--accent-green)',t:'Fort ✓'}][score]||{w:'0%',c:'var(--border)',t:'Entrez un mot de passe'};
+  document.getElementById('force-fill').style.width=cfg.w;
+  document.getElementById('force-fill').style.background=cfg.c;
+  document.getElementById('force-txt').textContent=cfg.t;
+  document.getElementById('force-txt').style.color=cfg.c;
 }
 
 async function changerMdp() {
-  var mdpNew = document.getElementById('mdp-new').value;
-  var mdpConfirm = document.getElementById('mdp-confirm').value;
-
-  if (!mdpNew || !mdpConfirm) return showErr('Remplissez tous les champs.');
-  if (mdpNew !== mdpConfirm) return showErr('Les mots de passe ne correspondent pas.');
-  if (mdpNew.length < 8) return showErr('Mot de passe trop court (min. 8 caractères).');
-  if (!/[A-Z]/.test(mdpNew)) return showErr('Ajoutez au moins une majuscule.');
-  if (!/[0-9]/.test(mdpNew)) return showErr('Ajoutez au moins un chiffre.');
-  if (!/[^A-Za-z0-9]/.test(mdpNew)) return showErr('Ajoutez au moins un symbole (!@#...).');
-
-  var btn = document.getElementById('btn-changer');
-  btn.disabled = true; btn.textContent = 'Enregistrement...';
-
+  const mdpNew=document.getElementById('mdp-new').value;
+  const mdpConfirm=document.getElementById('mdp-confirm').value;
+  if(!mdpNew||!mdpConfirm) return showErr('Remplissez tous les champs.');
+  if(mdpNew!==mdpConfirm) return showErr('Les mots de passe ne correspondent pas.');
+  const erreurs=validerMotDePasse(mdpNew);
+  if(erreurs.length>0) return showErr(erreurs[0]);
+  const btn=document.getElementById('btn-changer');
+  btn.disabled=true; btn.textContent='Enregistrement...';
   try {
-    // Changer le mot de passe dans Supabase Auth
-    var { data, error } = await db.auth.updateUser({ password: mdpNew });
-    if (error) throw error;
-
-    // Mettre à jour premiere_connexion = false
-    var { data: session } = await db.auth.getSession();
-    if (session?.session?.user) {
-      var userId = session.session.user.id;
-      // Chercher dans utilisateurs par id ou auth_id
-      var { data: u } = await db.from('utilisateurs').select('id, role').eq('id', userId).maybeSingle();
-      if (!u) {
-        var { data: u2 } = await db.from('utilisateurs').select('id, role').eq('auth_id', userId).maybeSingle();
-        u = u2;
-      }
-      if (u) {
-        await db.from('utilisateurs').update({ premiere_connexion: false, mdp_temp: null }).eq('id', u.id);
-        var ok = document.getElementById('ok-mdp');
-        ok.textContent = '✅ Mot de passe changé ! Redirection...';
-        ok.style.display = 'block';
-        setTimeout(function() {
-          window.location.href = ROLES[u.role] || 'index.html';
-        }, 2000);
+    const {error}=await db.auth.updateUser({password:mdpNew});
+    if(error) throw error;
+    const {data:session}=await db.auth.getSession();
+    if(session?.session?.user) {
+      const userId=session.session.user.id;
+      let {data:u}=await db.from('utilisateurs').select('id,role').eq('id',userId).maybeSingle();
+      if(!u){const{data:u2}=await db.from('utilisateurs').select('id,role').eq('auth_id',userId).maybeSingle();u=u2;}
+      if(u){
+        await db.from('utilisateurs').update({premiere_connexion:false,mdp_temp:null}).eq('id',u.id);
+        const ok=document.getElementById('ok-mdp');
+        ok.textContent='✅ Mot de passe défini avec succès ! Redirection...';
+        ok.style.display='block';
+        setTimeout(()=>window.location.href=ROLES[u.role]||'index.html',2000);
       }
     }
-  } catch(e) {
-    showErr(e.message || 'Erreur lors du changement.');
-  }
-
-  btn.disabled = false; btn.textContent = 'Enregistrer mon mot de passe';
+  } catch(e){showErr(e.message||'Erreur lors du changement.');}
+  btn.disabled=false; btn.textContent='Enregistrer et accéder à mon espace';
 }
 </script>
 </body>

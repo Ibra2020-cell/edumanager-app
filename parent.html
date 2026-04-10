@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>EduManager — Espace Parent</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <link rel="stylesheet" href="shared-styles.css"/>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f0eb; color: #1a1a1a; }
@@ -104,6 +104,7 @@
   </div>
 
   <div class="main">
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
     <div class="topbar">
       <div>
         <div class="topbar-title" id="page-title">Accueil</div>
@@ -252,23 +253,12 @@ let mesEnfants = [];
   if (demo.role === 'parent') {
     currentUser = { ...demo, demo: true };
     const { data: ecoles } = await db.from('ecoles').select('*').limit(1);
-    if (ecoles?.length) {
-      ecoleId = ecoles[0].id;
-      document.getElementById('school-name').textContent = ecoles[0].nom;
-      // En mode demo, prendre le premier parent disponible
-      const { data: parents } = await db.from('utilisateurs').select('id').eq('ecole_id', ecoles[0].id).eq('role', 'parent').limit(1);
-      if (parents?.length) currentUser.id = parents[0].id;
-    }
+    if (ecoles?.length) { ecoleId = ecoles[0].id; document.getElementById('school-name').textContent = ecoles[0].nom; }
   } else {
     try {
       const { data: { session } } = await db.auth.getSession();
       if (!session) { window.location.href = 'index.html'; return; }
-      // Chercher par id OU par auth_id
-      let { data: u } = await db.from('utilisateurs').select('*, ecoles(*)').eq('id', session.user.id).maybeSingle();
-      if (!u) {
-        const { data: u2 } = await db.from('utilisateurs').select('*, ecoles(*)').eq('auth_id', session.user.id).maybeSingle();
-        u = u2;
-      }
+      const { data: u } = await db.from('utilisateurs').select('*, ecoles(*)').eq('id', session.user.id).maybeSingle();
       if (!u || u.role !== 'parent') { window.location.href = 'index.html'; return; }
       currentUser = u; ecoleId = u.ecole_id;
       document.getElementById('school-name').textContent = u.ecoles?.nom || '';
@@ -281,22 +271,6 @@ let mesEnfants = [];
   document.getElementById('page-sub').textContent = `Bienvenue, ${prenom || nom}`;
   const piEmail = document.getElementById('pi-email-display');
   if (piEmail) piEmail.textContent = currentUser.email || '—';
-  // Charger les enfants du parent
-  if (ecoleId) {
-    // Chercher l'id du parent dans utilisateurs via auth_id OU id direct
-    var parentId = currentUser.id;
-    var { data: profil } = await db.from('utilisateurs')
-      .select('id')
-      .eq('auth_id', parentId)
-      .maybeSingle();
-    if (profil) parentId = profil.id;
-    
-    const { data: liens } = await db.from('parents_eleves')
-      .select('*, eleves(id, nom, prenom, numero_matricule, classes(nom, niveau))')
-      .eq('parent_id', parentId);
-    mesEnfants = (liens||[]).map(function(l) { return l.eleves; }).filter(Boolean);
-    currentUser.id = parentId;
-  }
   await chargerDashboard();
 })();
 
@@ -340,44 +314,6 @@ async function chargerDashboard() {
       const totalAbs = absResults.reduce((s,r) => s+(r.count||0), 0);
       document.getElementById('d-absences').textContent = totalAbs;
 
-      // Notifications non lues
-      if (currentUser?.id) {
-        const { data: notifs } = await db.from('notifications')
-          .select('*')
-          .eq('destinataire_id', currentUser.id)
-          .eq('lu', false)
-          .order('created_at', {ascending: false});
-        
-        if (notifs && notifs.length > 0) {
-          // Afficher bannière de notifications
-          var notifHtml = '<div style="background:#FCEBEB;border:1px solid #F09595;border-radius:10px;padding:14px;margin-bottom:16px">' +
-            '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
-              '<div style="font-size:14px;font-weight:600;color:#791F1F">🔔 ' + notifs.length + ' nouvelle(s) notification(s)</div>' +
-              '<button onclick="marquerToutLu()" style="padding:4px 10px;background:#E24B4A;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11px">Tout marquer lu</button>' +
-            '</div>' +
-            notifs.map(function(n) {
-              return '<div style="display:flex;align-items:flex-start;justify-content:space-between;padding:8px;background:#fff;border-radius:6px;margin-bottom:4px">' +
-                '<div>' +
-                  '<div style="font-size:12px;font-weight:600;color:#791F1F">' + n.titre + '</div>' +
-                  '<div style="font-size:12px;color:#555;margin-top:2px">' + n.message + '</div>' +
-                  '<div style="font-size:10px;color:#aaa;margin-top:2px">' + new Date(n.created_at).toLocaleDateString('fr-FR') + '</div>' +
-                '</div>' +
-                '<button onclick="marquerLu(\'' + n.id + '\')" style="padding:3px 8px;background:#FCEBEB;color:#791F1F;border:1px solid #F09595;border-radius:4px;cursor:pointer;font-size:10px;flex-shrink:0;margin-left:8px">Lu</button>' +
-              '</div>';
-            }).join('') +
-          '</div>';
-          
-          // Insérer avant les cartes enfants
-          var contDash = document.getElementById('cont-dash');
-          var existing = document.getElementById('notif-banner');
-          if (existing) existing.remove();
-          var div = document.createElement('div');
-          div.id = 'notif-banner';
-          div.innerHTML = notifHtml;
-          contDash.insertBefore(div, contDash.firstChild);
-        }
-      }
-
       // Annonces
       const { count: nbAnn } = await db.from('annonces').select('id',{count:'exact'}).eq('ecole_id', ecoleId);
       document.getElementById('d-annonces').textContent = nbAnn || 0;
@@ -418,17 +354,7 @@ async function chargerDashboard() {
     document.getElementById('load-dash').innerHTML = `<div style="color:#A32D2D;text-align:center;padding:20px">Erreur : ${e.message}</div>`;
   }
 }
-async function marquerLu(notifId) {
-  await db.from('notifications').update({ lu: true }).eq('id', notifId);
-  await chargerDashboard();
-}
 
-async function marquerToutLu() {
-  if (!currentUser?.id) return;
-  await db.from('notifications').update({ lu: true }).eq('destinataire_id', currentUser.id).eq('lu', false);
-  var banner = document.getElementById('notif-banner');
-  if (banner) banner.remove();
-}
 async function chargerEnfants() {
   document.getElementById('load-enfants').style.display = 'block';
   document.getElementById('cont-enfants').innerHTML = '';
@@ -458,53 +384,29 @@ async function chargerNotes() {
   document.getElementById('load-notes').style.display = 'block';
   document.getElementById('cont-notes').innerHTML = '';
   if (!ecoleId || mesEnfants.length === 0) {
-    document.getElementById('load-notes').innerHTML = '<div class="empty"><div class="empty-icon">📊</div>Aucun enfant rattaché à votre compte.</div>';
+    document.getElementById('load-notes').innerHTML = '<div class="empty"><div class="empty-icon">📊</div>Aucune donnée disponible en mode démo.<br>Connectez-vous avec un vrai compte parent.</div>';
     return;
   }
-  var html = '';
-  for (var i = 0; i < mesEnfants.length; i++) {
-    var enfant = mesEnfants[i];
-    var resNotes = await db.from('notes').select('*, matieres(nom,coefficient)').eq('eleve_id', enfant.id).order('created_at', {ascending:false});
-    var notes = resNotes.data || [];
-    // Moyenne pondérée
-    var totalPoints = 0, totalCoef = 0;
-    notes.forEach(function(n) {
-      var c = n.matieres ? n.matieres.coefficient : 1;
-      totalPoints += Number(n.valeur) * c;
-      totalCoef += c;
-    });
-    var moy = totalCoef > 0 ? (totalPoints/totalCoef).toFixed(1) : '—';
-    var moyColor = moy >= 14 ? '#3B6D11' : moy >= 10 ? '#185FA5' : '#A32D2D';
-
-    // Comportement
-    var resComp = await db.from('comportements').select('*').eq('eleve_id', enfant.id).order('created_at', {ascending:false}).limit(1);
-    var comp = resComp.data && resComp.data.length > 0 ? resComp.data[0] : null;
-    var compHtml = comp
-      ? '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:8px;background:#f9f9f9;border-radius:6px"><span style="font-size:12px;color:#888">Comportement:</span><span style="color:#EF9F27">' + '★'.repeat(comp.note_comportement||0) + '☆'.repeat(5-(comp.note_comportement||0)) + '</span><span style="font-size:12px;color:#555">' + (comp.commentaire||'') + '</span></div>'
-      : '';
-
-    var lignesNotes = notes.length === 0
-      ? '<tr><td colspan="4" style="text-align:center;color:#aaa;padding:16px">Aucune note pour l\'instant</td></tr>'
-      : notes.map(function(n) {
-          var v = Number(n.valeur);
-          var cl = v>=14 ? 'note-high' : v>=10 ? 'note-mid' : 'note-low';
-          return '<tr><td style="font-weight:500">' + (n.matieres?n.matieres.nom:'—') + '</td><td class="' + cl + '">' + n.valeur + '/20</td><td style="color:#888">' + (n.matieres?n.matieres.coefficient:1) + '</td><td style="font-size:12px;color:#888">' + (n.appreciation||'—') + '</td><td style="font-size:11px;color:#aaa">' + (n.periode||'—') + '</td></tr>';
-        }).join('');
-
-    html += '<div class="card" style="margin-bottom:16px">' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">' +
-        '<div style="display:flex;align-items:center;gap:12px">' +
-          '<div style="width:44px;height:44px;border-radius:50%;background:#E1F5EE;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#085041">' + (enfant.prenom[0]||'') + (enfant.nom[0]||'') + '</div>' +
-          '<div><div style="font-size:15px;font-weight:600">' + enfant.prenom + ' ' + enfant.nom + '</div>' +
-          '<div style="font-size:12px;color:#888">' + (enfant.classes?enfant.classes.nom:'—') + ' · ' + (enfant.numero_matricule||'—') + '</div></div>' +
-        '</div>' +
-        '<div style="text-align:right"><div style="font-size:11px;color:#888">Moyenne generale</div><div style="font-size:22px;font-weight:700;color:' + moyColor + '">' + moy + '/20</div></div>' +
-      '</div>' +
-      compHtml +
-      '<table style="margin-top:10px"><thead><tr><th>Matière</th><th>Note</th><th>Coef.</th><th>Appréciation</th><th>Période</th></tr></thead><tbody>' + lignesNotes + '</tbody></table>' +
-    '</div>';
+  for (const enfant of mesEnfants) {
+    const { data: notes } = await db.from('notes').select('*, matieres(nom,coefficient)').eq('eleve_id', enfant.id).order('created_at',{ascending:false});
+    const moy = (notes||[]).length ? ((notes||[]).reduce((s,n)=>s+Number(n.valeur),0)/(notes||[]).length).toFixed(1) : '—';
+    document.getElementById('cont-notes').innerHTML += `
+      <div class="card">
+        <div class="card-title">${enfant.prenom} ${enfant.nom} — Moyenne : <span style="color:${moy>=10?'#3B6D11':'#A32D2D'}">${moy}/20</span></div>
+        <table>
+          <thead><tr><th>Matière</th><th>Note</th><th>Coef.</th><th>Appréciation</th></tr></thead>
+          <tbody>
+            ${(notes||[]).length === 0 ? '<tr><td colspan="4" style="text-align:center;color:#aaa;padding:16px">Aucune note pour l\'instant</td></tr>' :
+            (notes||[]).map(n => `<tr>
+              <td style="font-weight:500">${n.matieres?.nom||'—'}</td>
+              <td class="${Number(n.valeur)>=14?'note-high':Number(n.valeur)>=10?'note-mid':'note-low'}">${n.valeur}/20</td>
+              <td style="color:#888">${n.matieres?.coefficient||1}</td>
+              <td style="font-size:12px;color:#888">${n.appreciation||'—'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
   }
-  document.getElementById('cont-notes').innerHTML = html;
   document.getElementById('load-notes').style.display = 'none';
 }
 
@@ -534,196 +436,18 @@ async function chargerAbsences() {
 
 async function chargerBulletins() {
   document.getElementById('load-bulletins').style.display = 'none';
-  if (mesEnfants.length === 0) {
-    document.getElementById('cont-bulletins').innerHTML = '<div class="empty"><div class="empty-icon">📄</div>Aucun enfant rattache a votre compte.</div>';
-    return;
-  }
-  var html = '';
-  for (var i = 0; i < mesEnfants.length; i++) {
-    var e = mesEnfants[i];
-    // Recuperer les periodes disponibles pour cet enfant
-    var res = await db.from('notes').select('periode').eq('eleve_id', e.id);
-    var periodes = [...new Set((res.data||[]).map(function(n) { return n.periode; }).filter(Boolean))];
-    var periodesHtml = periodes.length === 0
-      ? '<div style="font-size:12px;color:#aaa;padding:10px">Aucune note disponible pour generer un bulletin.</div>'
-      : periodes.map(function(p) {
-          return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:#f9f9f9;border-radius:8px;margin-bottom:6px">' +
-            '<div><div style="font-size:13px;font-weight:500">Bulletin — ' + p + ' · 2025-2026</div>' +
-            '<div style="font-size:11px;color:#aaa;margin-top:2px">Disponible</div></div>' +
-            '<button onclick="telechargerBulletinParent(\'' + e.id + '\',\'' + p + '\',this)" style="padding:6px 14px;background:#0f6e56;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Telecharger PDF</button>' +
-          '</div>';
-        }).join('');
-    html += '<div class="card" style="margin-bottom:14px">' +
-      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">' +
-        '<div style="width:40px;height:40px;border-radius:50%;background:#E1F5EE;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#085041">' + (e.prenom[0]||'') + (e.nom[0]||'') + '</div>' +
-        '<div><div style="font-size:14px;font-weight:600">' + e.prenom + ' ' + e.nom + '</div>' +
-        '<div style="font-size:12px;color:#888">' + (e.classes?e.classes.nom:'—') + ' · ' + (e.numero_matricule||'—') + '</div></div>' +
-      '</div>' +
-      periodesHtml +
-    '</div>';
-  }
-  document.getElementById('cont-bulletins').innerHTML = html;
-}
-
-async function telechargerBulletinParent(eleveId, periode, btn) {
-  btn.textContent = 'Generation...';
-  btn.disabled = true;
-  try {
-    await genererBulletinEleve(eleveId, ecoleId, periode);
-  } catch(e) {
-    alert('Erreur : ' + e.message);
-  }
-  btn.textContent = 'Telecharger PDF';
-  btn.disabled = false;
-}
-
-async function genererBulletinEleve(eleveId, ecoleId, periode) {
-  var jsPDF = window.jspdf ? window.jspdf.jsPDF : null;
-  if (!jsPDF) { alert('Bibliotheque PDF non chargee.'); return; }
-  var re = await db.from('eleves').select('*, classes(id,nom,niveau)').eq('id', eleveId).single();
-  var rn = await db.from('notes').select('*, matieres(nom,coefficient)').eq('eleve_id', eleveId).eq('periode', periode).order('matieres(nom)');
-  var ra = await db.from('absences').select('*').eq('eleve_id', eleveId);
-  var ro = await db.from('ecoles').select('*').eq('id', ecoleId).single();
-  var rc = await db.from('comportements').select('*').eq('eleve_id', eleveId).eq('periode', periode).maybeSingle();
-  var eleve = re.data;
-  var notes = rn.data || [];
-  var absences = ra.data || [];
-  var ecole = ro.data;
-  var comp = rc.data;
-  var totalPoints = 0, totalCoef = 0;
-  notes.forEach(function(n) { var c = n.matieres?n.matieres.coefficient:1; totalPoints += Number(n.valeur)*c; totalCoef += c; });
-  var moyEleve = totalCoef > 0 ? (totalPoints/totalCoef) : 0;
-  var moyEleveStr = totalCoef > 0 ? moyEleve.toFixed(2) : '—';
-  var rang = '—', totalEleves = '—';
-  if (eleve && eleve.classes) {
-    var resClasseNotes = await db.from('notes').select('eleve_id, valeur, matieres(coefficient)').eq('classe_id', eleve.classes.id).eq('periode', periode);
-    var notesClasse = resClasseNotes.data || [];
-    var moyParEleve = {};
-    notesClasse.forEach(function(n) {
-      if (!moyParEleve[n.eleve_id]) moyParEleve[n.eleve_id] = { pts: 0, coef: 0 };
-      var c = n.matieres ? n.matieres.coefficient : 1;
-      moyParEleve[n.eleve_id].pts += Number(n.valeur) * c;
-      moyParEleve[n.eleve_id].coef += c;
-    });
-    var moyennes = Object.keys(moyParEleve).map(function(id) {
-      return moyParEleve[id].coef > 0 ? moyParEleve[id].pts / moyParEleve[id].coef : 0;
-    }).sort(function(a,b) { return b-a; });
-    totalEleves = moyennes.length;
-    var rangNum = moyennes.findIndex(function(m) { return Math.abs(m - moyEleve) < 0.01; });
-    rang = rangNum >= 0 ? (rangNum + 1) : '—';
-  }
-  var absPeriode = absences.filter(function(a) { return a.periode && a.periode === periode; });
-  var absTotal = absPeriode.length;
-  var absNJ = absPeriode.filter(function(a) { return !a.justifiee; }).length;
-  var doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  var W = 210, margin = 12, cW = W - 2*margin;
-  doc.setFillColor(24,95,165); doc.rect(0,0,W,4,'F');
-  doc.setTextColor(26,26,26); doc.setFontSize(13); doc.setFont('helvetica','bold');
-  doc.text(ecole ? ecole.nom : 'Ecole', margin, 14);
-  doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80);
-  if (ecole && ecole.ville) doc.text(ecole.ville, margin, 20);
-  doc.setTextColor(26,26,26); doc.setFontSize(13); doc.setFont('helvetica','bold');
-  var nomComplet = eleve ? (eleve.nom.toUpperCase() + ' ' + eleve.prenom) : '';
-  doc.text(nomComplet, W-margin, 14, {align:'right'});
-  doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80);
-  if (eleve && eleve.date_naissance) doc.text('Date de naissance : ' + new Date(eleve.date_naissance).toLocaleDateString('fr-FR'), W-margin, 20, {align:'right'});
-  doc.text('Matricule : ' + (eleve?eleve.numero_matricule||'—':'—'), W-margin, 25, {align:'right'});
-  doc.setDrawColor(200,200,200); doc.setLineWidth(0.3); doc.line(margin,30,W-margin,30);
-  doc.setTextColor(24,95,165); doc.setFontSize(12); doc.setFont('helvetica','bold');
-  doc.text('Bulletin — ' + periode + '  ·  Annee scolaire 2025-2026', W/2, 37, {align:'center'});
-  doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80);
-  doc.text('Classe : ' + (eleve&&eleve.classes?eleve.classes.nom:'—'), W/2, 43, {align:'center'});
-  var y = 50;
-  var col = { mat:55, coef:10, note:15, min:12, max:12, moy:15, bilan:cW-55-10-15-12-12-15 };
-  var x0 = margin;
-  doc.setFillColor(24,95,165); doc.rect(x0,y,cW,7,'F');
-  doc.setTextColor(255,255,255); doc.setFontSize(7); doc.setFont('helvetica','bold');
-  var xc = x0;
-  doc.text('Matieres', xc+2, y+4.8); xc += col.mat;
-  doc.text('Coef', xc+1, y+4.8); xc += col.coef;
-  doc.text('Note', xc+1, y+4.8); xc += col.note;
-  doc.text('Min', xc+1, y+4.8); xc += col.min;
-  doc.text('Max', xc+1, y+4.8); xc += col.max;
-  doc.text('Moy.Cl', xc+1, y+4.8); xc += col.moy;
-  doc.text('Bilan et conseils', xc+2, y+4.8);
-  y += 7;
-  notes.forEach(function(n, idx) {
-    var rowH = 8;
-    if (idx%2===0) { doc.setFillColor(248,248,248); } else { doc.setFillColor(255,255,255); }
-    doc.rect(x0,y,cW,rowH,'F');
-    doc.setDrawColor(220,220,220); doc.setLineWidth(0.2); doc.rect(x0,y,cW,rowH,'S');
-    var v = Number(n.valeur);
-    xc = x0;
-    doc.setTextColor(26,26,26); doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
-    doc.text((n.matieres?n.matieres.nom:'—').substring(0,28), xc+2, y+5.2); xc += col.mat;
-    doc.setTextColor(80,80,80);
-    doc.text(String(n.matieres?n.matieres.coefficient:1), xc+1, y+5.2); xc += col.coef;
-    if (v>=14) doc.setTextColor(27,94,32); else if (v>=10) doc.setTextColor(13,71,161); else doc.setTextColor(183,28,28);
-    doc.setFont('helvetica','bold'); doc.text(String(n.valeur), xc+2, y+5.2); xc += col.note;
-    doc.setTextColor(120,120,120); doc.setFont('helvetica','normal');
-    doc.text('—', xc+2, y+5.2); xc += col.min;
-    doc.text('—', xc+2, y+5.2); xc += col.max;
-    doc.text('—', xc+2, y+5.2); xc += col.moy;
-    doc.setTextColor(60,60,60); doc.text((n.appreciation||'').substring(0,45), xc+2, y+5.2);
-    y += rowH;
-  });
-  if (notes.length===0) {
-    doc.setFillColor(248,248,248); doc.rect(x0,y,cW,8,'F');
-    doc.setTextColor(150,150,150); doc.setFontSize(8);
-    doc.text('Aucune note disponible pour cette periode', x0+2, y+5.2);
-    y += 8;
-  }
-  y += 2;
-  var moyColor = moyEleve>=14?[27,94,32]:moyEleve>=10?[13,71,161]:[183,28,28];
-  doc.setFillColor(moyColor[0],moyColor[1],moyColor[2]); doc.rect(x0,y,cW,9,'F');
-  doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont('helvetica','bold');
-  doc.text('Moyenne generale : ' + moyEleveStr + ' / 20', x0+4, y+6);
-  doc.text('Rang : ' + rang + ' / ' + totalEleves, W-margin-2, y+6, {align:'right'});
-  y += 14;
-  if (comp) {
-    doc.setFillColor(255,248,225); doc.roundedRect(x0,y,cW,12,2,2,'F');
-    doc.setDrawColor(255,193,7); doc.setLineWidth(0.3); doc.roundedRect(x0,y,cW,12,2,2,'S');
-    doc.setTextColor(121,85,72); doc.setFontSize(8); doc.setFont('helvetica','bold');
-    doc.text('Comportement :', x0+4, y+5);
-    doc.setTextColor(255,152,0);
-    doc.text('★'.repeat(comp.note_comportement||0)+'☆'.repeat(5-(comp.note_comportement||0)), x0+40, y+5);
-    if (comp.commentaire) { doc.setTextColor(80,80,80); doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.text(comp.commentaire.substring(0,80), x0+4, y+10); }
-    y += 17;
-  }
-  doc.setFillColor(245,245,245); doc.roundedRect(x0,y,cW,14,2,2,'F');
-  doc.setTextColor(26,26,26); doc.setFontSize(8); doc.setFont('helvetica','bold');
-  doc.text('Absences & Assiduite', x0+4, y+5);
-  doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
-  doc.text('1/2 journees absence : ' + absTotal, x0+4, y+10);
-  doc.text('Non justifiees : ' + absNJ, x0+70, y+10);
-  y += 19;
-  var mention = '', avis = '';
-  if (moyEleve>=16) { mention='Felicitations'; avis='Excellents resultats. Continuez ainsi !'; }
-  else if (moyEleve>=14) { mention='Compliments'; avis='Tres bons resultats. Poursuivez vos efforts.'; }
-  else if (moyEleve>=12) { mention='Encouragements'; avis='Bons resultats. Des efforts supplementaires permettront de progresser.'; }
-  else if (moyEleve>=10) { mention='Passage'; avis='Resultats suffisants. Il faut intensifier les efforts pour consolider les acquis.'; }
-  else if (moyEleve>=8) { mention='Passage avec reserves'; avis='Resultats insuffisants. Des efforts importants sont necessaires.'; }
-  else { mention='Redoublement envisage'; avis='Resultats tres insuffisants. Un entretien avec les parents est recommande.'; }
-  doc.setFillColor(232,245,233); doc.roundedRect(x0,y,cW,20,2,2,'F');
-  doc.setDrawColor(76,175,80); doc.setLineWidth(0.3); doc.roundedRect(x0,y,cW,20,2,2,'S');
-  doc.setTextColor(27,94,32); doc.setFontSize(8.5); doc.setFont('helvetica','bold');
-  doc.text('Avis du conseil de classe : ' + mention, x0+4, y+6);
-  doc.setTextColor(60,60,60); doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
-  doc.text(avis, x0+4, y+12);
-  y += 25;
-  var sigY = Math.max(y+5, 255);
-  doc.setTextColor(80,80,80); doc.setFontSize(8); doc.setFont('helvetica','normal');
-  doc.text('Le Directeur', x0+10, sigY);
-  doc.text('Prof. Principal', W/2-15, sigY);
-  doc.text('Signature Parent/Tuteur', W-margin-45, sigY);
-  doc.setDrawColor(150,150,150); doc.setLineWidth(0.3);
-  doc.line(x0, sigY+15, x0+50, sigY+15);
-  doc.line(W/2-20, sigY+15, W/2+25, sigY+15);
-  doc.line(W-margin-50, sigY+15, W-margin, sigY+15);
-  doc.setFillColor(24,95,165); doc.rect(0,287,W,10,'F');
-  doc.setTextColor(255,255,255); doc.setFontSize(6.5);
-  doc.text('EduManager · '+(ecole?ecole.nom:'')+' · Genere le '+new Date().toLocaleDateString('fr-FR')+' · edumanager-app-pied.vercel.app', W/2, 293, {align:'center'});
-  doc.save('Bulletin_'+(eleve?eleve.prenom+'_'+eleve.nom:'eleve')+'_'+periode+'.pdf');
+  document.getElementById('cont-bulletins').innerHTML = mesEnfants.length === 0
+    ? '<div class="empty"><div class="empty-icon">📄</div>Connectez-vous avec un vrai compte pour accéder aux bulletins.</div>'
+    : mesEnfants.map(e => `
+      <div class="card">
+        <div class="card-title">${e.prenom} ${e.nom}</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:#f9f9f9;border-radius:8px">
+            <div><div style="font-size:13px;font-weight:500">Bulletin — Trimestre 2 · 2025-2026</div><div style="font-size:11px;color:#aaa;margin-top:2px">Disponible</div></div>
+            <button class="btn btn-primary" style="font-size:12px;padding:6px 12px" onclick="alert('📄 Bulletin PDF — Disponible après génération par l\\'école')">Télécharger</button>
+          </div>
+        </div>
+      </div>`).join('');
 }
 
 async function chargerAnnonces() {
@@ -781,6 +505,29 @@ async function logout() {
   await db.auth.signOut();
   window.location.href = 'index.html';
 }
+
+// ===== SIDEBAR MOBILE =====
+function toggleSidebar() {
+  const sidebar = document.querySelector('.sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  if (sidebar) sidebar.classList.toggle('open');
+  if (overlay) overlay.classList.toggle('active');
+}
+function closeSidebar() {
+  const sidebar = document.querySelector('.sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  if (sidebar) sidebar.classList.remove('open');
+  if (overlay) overlay.classList.remove('active');
+}
+// Fermer sidebar sur nav clic (mobile)
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.nav-item').forEach(function(item) {
+    item.addEventListener('click', function() {
+      if (window.innerWidth <= 768) closeSidebar();
+    });
+  });
+});
+
 </script>
 </body>
 </html>
