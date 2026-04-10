@@ -233,10 +233,14 @@ let avisRatings = {};
     document.getElementById('school-name').textContent = u.ecoles?.nom || '';
     localStorage.setItem('edu_user', JSON.stringify({ role: u.role, nom: u.nom, prenom: u.prenom, email: session.user.email, demo: false }));
     // Trouver le profil élève via auth_id
-    var { data: elv } = await db.from('eleves').select('*').eq('auth_id', session.user.id).maybeSingle();
-    if (!elv) {
-      var { data: elv2 } = await db.from('eleves').select('*').eq('numero_matricule', u.numero_matricule).maybeSingle();
+    var { data: elv } = await db.from('eleves').select('*, classes(nom)').eq('auth_id', session.user.id).maybeSingle();
+    if (!elv && u.numero_matricule) {
+      var { data: elv2 } = await db.from('eleves').select('*, classes(nom)').eq('numero_matricule', u.numero_matricule).maybeSingle();
       elv = elv2;
+    }
+    if (!elv) {
+      var { data: elv3 } = await db.from('eleves').select('*, classes(nom)').eq('ecole_id', u.ecole_id).eq('nom', u.nom).eq('prenom', u.prenom).maybeSingle();
+      elv = elv3;
     }
     if (elv) {
       eleveId = elv.id;
@@ -248,12 +252,13 @@ let avisRatings = {};
       document.getElementById('user-initials').textContent = ((u.prenom?.[0]||'') + (u.nom?.[0]||'')).toUpperCase();
     }
   } catch(e) { window.location.href = 'index.html'; return; }
-  const nom = currentUser.nom || 'Élève';
-  const prenom = currentUser.prenom || '';
-  document.getElementById('user-name').textContent = `${prenom} ${nom}`.trim();
-  document.getElementById('user-initials').textContent = `${prenom[0]||''}${nom[0]||''}`.toUpperCase();
-  document.getElementById('page-sub').textContent = `${new Date().toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' })}`;
-  await chargerDashboard();
+  document.getElementById('page-sub').textContent = new Date().toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
+  if (!eleveId) {
+    document.getElementById('load-dash').innerHTML = '<div style="color:#A32D2D;text-align:center;padding:20px">⚠️ Profil élève introuvable. Contactez votre directeur.</div>';
+    document.getElementById('load-dash').style.display = 'block';
+  } else {
+    await chargerDashboard();
+  }
 })();
 
 const pageMeta = {
