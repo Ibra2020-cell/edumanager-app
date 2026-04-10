@@ -193,7 +193,7 @@
     <div class="field">
       <label>Numéro matricule</label>
       <input type="text" id="l-matricule" placeholder="Ex : PRF-LD-26-001" style="text-transform:uppercase" onkeydown="if(event.key==='Enter')doLogin()"/>
-      <div class="field-note">📋 Fourni par votre établissement scolaire</div>
+      <div class="field-note">📋 Fourni par votre ecole </div>
     </div>
 
     <div class="field">
@@ -362,11 +362,7 @@ function switchTab(t) {
   document.getElementById('form-premiere').style.display = t==='premiere' ? 'block' : 'none';
   document.getElementById('form-oubli').style.display = t==='oubli' ? 'block' : 'none';
 }
-  document.querySelectorAll('.tab').forEach((el,i) => el.classList.toggle('active', (t==='login'&&i===0)||(t==='register'&&i===1)));
-  document.getElementById('form-login').style.display = t==='login' ? 'block' : 'none';
-  document.getElementById('form-register').style.display = t==='register' ? 'block' : 'none';
-}
-
+ 
 function showErr(id, msg) {
   const el = document.getElementById(id);
   el.textContent = msg; el.style.display = 'block';
@@ -533,16 +529,18 @@ async function demanderResetMdp() {
       var { data: eleve } = await db.from('eleves').select('id,nom,prenom,ecole_id,numero_matricule').eq('numero_matricule', matricule).maybeSingle();
       if (!eleve) throw new Error('Matricule introuvable. Vérifiez votre matricule et code école.');
     }
-    // Enregistrer la demande dans signalements
-    await db.from('signalements').insert([{
-      ecole_id: (u||eleve).ecole_id,
-      type: 'reset_mdp',
-      description: 'Demande de réinitialisation de mot de passe pour : ' + matricule,
-      statut: 'en_attente',
-      donnees: JSON.stringify({ matricule: matricule, email: email, nouveau_mdp: mdpNew })
-    }]);
+    // Connexion avec email pour changer le mdp directement
+    var resSign = await db.auth.signInWithPassword({ email: email, password: mdpNew });
+    if (!resSign.error) {
+      // Le mdp est déjà correct — rediriger
+      window.location.href = ROLES[u?.role || eleve?.role || 'eleve'] || 'index.html';
+      return;
+    }
+    // Sinon envoyer reset par email Supabase
+    var resReset = await db.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/changer-mdp.html' });
+    if (resReset.error) throw new Error('Impossible de réinitialiser. Vérifiez votre matricule et code école.');
     var ok = document.getElementById('ok-oubli');
-    ok.textContent = '✅ Demande envoyée ! Votre directeur sera notifié et réinitialisera votre accès.';
+    ok.textContent = '✅ Un lien de réinitialisation a été envoyé. Contactez votre directeur si vous n\'avez pas d\'email.';
     ok.style.display = 'block';
     document.getElementById('err-oubli').style.display = 'none';
   } catch(e) {
