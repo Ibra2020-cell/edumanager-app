@@ -120,7 +120,6 @@
       <div class="nav-item" onclick="showPage('matieres',this)"><span class="nav-icon">📚</span> Matières</div>
       <div class="nav-item" onclick="showPage('notes',this)"><span class="nav-icon">📊</span> Notes & bulletins</div>
       <div class="nav-item" onclick="showPage('absences',this)"><span class="nav-icon">📌</span> Absences</div>
-      <div class="nav-item" onclick="showPage('heures',this)"><span class="nav-icon">⏱️</span> Heures des profs</div>
       <div class="nav-section">Communication</div>
       <div class="nav-item" onclick="showPage('annonces',this)"><span class="nav-icon">📢</span> Annonces</div>
       <div class="nav-item" onclick="showPage('evenements',this)"><span class="nav-icon">📅</span> Événements</div>
@@ -225,16 +224,21 @@
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
           <div>
             <div style="font-size:18px;font-weight:700">Professeurs</div>
-            <div style="font-size:13px;color:#888">Gestion des enseignants</div>
+            <div style="font-size:13px;color:#888">Gestion des enseignants & cours assignés</div>
           </div>
           <button class="btn btn-primary" onclick="genererModalProf()">+ Ajouter un professeur</button>
         </div>
-        <div class="card">
-          <div id="load-profs" class="loading"><div class="spinner"></div>Chargement...</div>
-          <table id="table-profs" style="display:none;width:100%">
-            <thead><tr><th>Professeur</th><th>Matricule</th><th>Cours assignés</th><th>Téléphone</th><th>Statut</th><th>Actions</th></tr></thead>
-            <tbody id="tbody-profs"></tbody>
-          </table>
+        <!-- FILTRES -->
+        <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+          <input type="text" id="search-profs" placeholder="Rechercher par nom ou matricule..." oninput="filtrerProfs()" style="flex:1;min-width:160px;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px"/>
+          <select id="filter-classe-profs" onchange="filtrerProfs()" style="padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff">
+            <option value="">Toutes les classes</option>
+          </select>
+        </div>
+        <!-- CARTES PROFS -->
+        <div id="load-profs" class="loading"><div class="spinner"></div>Chargement...</div>
+        <div id="cont-profs" style="display:none">
+          <div id="liste-profs-cards"></div>
         </div>
       </div>
 
@@ -303,11 +307,22 @@
 
       <!-- HEURES PROFS -->
       <div class="page" id="page-heures">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+          <div>
+            <div style="font-size:18px;font-weight:700">Heures des profs</div>
+            <div style="font-size:13px;color:#888">Cours assignés & volume horaire</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+          <input type="text" id="search-heures" placeholder="Rechercher par nom ou matricule..." oninput="filtrerHeures()" style="flex:1;min-width:160px;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px"/>
+          <select id="filter-classe-heures" onchange="filtrerHeures()" style="padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff">
+            <option value="">Toutes les classes</option>
+          </select>
+        </div>
         <div class="card">
-          <div class="card-title">Cours assignés & heures par semaine</div>
           <div id="load-heures" class="loading"><div class="spinner"></div>Chargement...</div>
           <div id="cont-heures" style="display:none">
-            <table>
+            <table style="width:100%">
               <thead><tr><th>Professeur</th><th>Cours assignés</th><th>Heures/semaine</th><th>Téléphone</th><th>Actions</th></tr></thead>
               <tbody id="tbody-heures"></tbody>
             </table>
@@ -512,7 +527,6 @@ const pageMeta = {
   matieres:       ['Matières', 'Disciplines enseignées', '+ Ajouter une matière', 'matiere'],
   notes:          ['Notes & bulletins', 'Résultats scolaires', '', ''],
   absences:       ['Absences', 'Appel et gestion des présences', '', ''],
-  heures:         ['Heures des profs', 'Suivi du volume horaire', '', ''],
   annonces:       ['Annonces', 'Communication avec les familles', '', ''],
   evenements:     ['Événements', 'Agenda de l\'école', '+ Créer un événement', 'evenement'],
   paiement:       ['Abonnement', 'Gérer votre plan', '', ''],
@@ -537,8 +551,7 @@ async function showPage(id, navEl) {
   if (id === 'professeurs') { const b = document.getElementById('action-btn'); b.textContent = '+ Ajouter un professeur'; b.style.display = ''; b.onclick = genererModalProf; }
   if (id === 'matieres') await chargerMatieres();
   if (id === 'notes') await preparerNotes();
-  if (id === 'absences') await preparerAbsences();
-  if (id === 'heures') await chargerHeures();
+  if (id === 'absences') await preparerAbsences();  
   if (id === 'annonces') await chargerAnnonces();
   if (id === 'evenements') await chargerEvenements();
 }
@@ -991,61 +1004,96 @@ async function supprimerClasse(id, nom) {
 // ============================================
 // PROFESSEURS
 // ============================================
+var tousProfsData = [];
+
 async function chargerProfesseurs() {
   document.getElementById('load-profs').style.display = 'block';
-  document.getElementById('table-profs').style.display = 'none';
+  document.getElementById('cont-profs').style.display = 'none';
   if (!ecoleId) return;
 
-  // Charger profs + leurs cours assignés
   const { data: profs } = await db.from('utilisateurs')
-    .select('*')
-    .eq('ecole_id', ecoleId)
-    .eq('role', 'professeur')
-    .order('nom');
+    .select('*').eq('ecole_id', ecoleId).eq('role', 'professeur').order('nom');
   tousProfs = profs || [];
 
-  // Charger cours assignés pour tous les profs
-  const profsIds = tousProfs.map(p => p.id);
-  var coursParProf = {};
-  if (profsIds.length > 0) {
-    const { data: cours } = await db.from('cours_assignes')
-      .select('prof_id, classes(nom), matieres(nom)')
-      .in('prof_id', profsIds);
-    (cours||[]).forEach(function(c) {
-      if (!coursParProf[c.prof_id]) coursParProf[c.prof_id] = [];
-      coursParProf[c.prof_id].push((c.matieres?.nom||'—') + ' / ' + (c.classes?.nom||'—'));
-    });
-  }
+  const { data: cours } = await db.from('cours_assignes')
+    .select('id, professeur_id, classe_id, matiere_id, heure_semaine, classes(nom), matieres(nom)')
+    .eq('ecole_id', ecoleId);
 
+  if (toutesClasses.length === 0) {
+    const { data: cls } = await db.from('classes').select('id,nom').eq('ecole_id', ecoleId).order('nom');
+    toutesClasses = cls || [];
+  }
+  var selClasse = document.getElementById('filter-classe-profs');
+  selClasse.innerHTML = '<option value="">Toutes les classes</option>';
+  toutesClasses.forEach(function(c) {
+    selClasse.innerHTML += '<option value="' + c.id + '">' + c.nom + '</option>';
+  });
+
+  var coursParProf = {};
+  (cours||[]).forEach(function(c) {
+    if (!coursParProf[c.professeur_id]) coursParProf[c.professeur_id] = [];
+    coursParProf[c.professeur_id].push(c);
+  });
+
+  tousProfsData = tousProfs.map(function(p) {
+    var coursList = coursParProf[p.id] || [];
+    var totalH = coursList.reduce(function(s, c) { return s + Number(c.heure_semaine||0); }, 0);
+    return { prof: p, cours: coursList, totalHeures: totalH };
+  });
+
+  afficherProfs(tousProfsData);
   document.getElementById('load-profs').style.display = 'none';
-  document.getElementById('table-profs').style.display = 'table';
-  document.getElementById('tbody-profs').innerHTML = tousProfs.length === 0
-    ? '<tr><td colspan="6" style="text-align:center;padding:24px;color:#aaa">Aucun professeur enregistré</td></tr>'
-    : tousProfs.map(function(p, i) {
-        var cours = coursParProf[p.id] || [];
-        var coursHtml = cours.length === 0
-          ? '<span style="color:#aaa;font-size:11px">Aucun cours</span>'
-          : cours.map(function(c) {
-              return '<span style="background:#E1F5EE;color:#085041;padding:2px 6px;border-radius:4px;font-size:11px;margin:1px;display:inline-block">' + c + '</span>';
-            }).join('');
-        var colors = ['#E6F1FB','#E1F5EE','#EEEDFE','#FAEEDA','#FCEBEB'];
-        var tcolors = ['#0C447C','#085041','#3C3489','#633806','#791F1F'];
-        return '<tr>' +
-          '<td><div style="display:flex;align-items:center;gap:8px">' +
-          '<div class="ava" style="background:' + colors[i%5] + ';color:' + tcolors[i%5] + '">' + (p.prenom?.[0]||'') + (p.nom?.[0]||'') + '</div>' +
-          '<div><div style="font-weight:500">' + (p.prenom||'') + ' ' + p.nom + '</div>' +
-          '<div style="font-size:11px;color:#999">' + (p.telephone||'—') + '</div></div>' +
-          '</div></td>' +
-          '<td style="font-size:12px;font-family:monospace;color:#555">' + (p.numero_matricule||'—') + '</td>' +
-          '<td style="max-width:200px">' + coursHtml + '</td>' +
-          '<td style="font-size:12px;color:#888">' + (p.telephone||'—') + '</td>' +
-          '<td><span class="badge ' + (p.actif?'badge-ok':'badge-err') + '">' + (p.actif?'Actif':'Inactif') + '</span></td>' +
-          '<td><div style="display:flex;gap:4px">' +
-          '<button class="btn-sm" onclick="modifierProf(\'' + p.id + '\')">Modifier</button>' +
-          '<button class="btn-sm btn-danger" onclick="supprimerProf(\'' + p.id + '\',\'' + p.prenom + ' ' + p.nom + '\')">✕</button>' +
-          '</div></td>' +
-          '</tr>';
-      }).join('');
+  document.getElementById('cont-profs').style.display = 'block';
+}
+
+function filtrerProfs() {
+  var search = (document.getElementById('search-profs').value || '').toLowerCase();
+  var classeId = document.getElementById('filter-classe-profs').value;
+  var filtered = tousProfsData.filter(function(d) {
+    var nom = ((d.prof.prenom||'') + ' ' + d.prof.nom).toLowerCase();
+    var mat = (d.prof.numero_matricule||'').toLowerCase();
+    var matchSearch = !search || nom.includes(search) || mat.includes(search);
+    var matchClasse = !classeId || d.cours.some(function(c) { return c.classe_id === classeId; });
+    return matchSearch && matchClasse;
+  });
+  afficherProfs(filtered);
+}
+
+function afficherProfs(liste) {
+  var colors = ['#E6F1FB','#E1F5EE','#EEEDFE','#FAEEDA','#FCEBEB'];
+  var tcolors = ['#0C447C','#085041','#3C3489','#633806','#791F1F'];
+  if (liste.length === 0) {
+    document.getElementById('liste-profs-cards').innerHTML = '<div style="text-align:center;padding:40px;color:#aaa">Aucun professeur trouvé</div>';
+    return;
+  }
+  document.getElementById('liste-profs-cards').innerHTML = liste.map(function(d, i) {
+    var p = d.prof;
+    var coursHtml = d.cours.length === 0
+      ? '<div style="color:#aaa;font-size:12px;font-style:italic">Aucun cours assigné</div>'
+      : d.cours.map(function(c) {
+          return '<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:#f9faf9;border-radius:6px;margin-bottom:4px">' +
+            '<div><span style="font-size:12px;font-weight:600;color:#085041">' + (c.matieres?.nom||'—') + '</span>' +
+            '<span style="font-size:11px;color:#888;margin-left:6px">· ' + (c.classes?.nom||'—') + '</span></div>' +
+            '<span style="font-size:11px;background:#E1F5EE;color:#085041;padding:2px 8px;border-radius:10px;font-weight:600">' +
+            (c.heure_semaine ? c.heure_semaine + 'h/sem' : '— h/sem') + '</span></div>';
+        }).join('');
+    return '<div style="background:#fff;border:1px solid #e8e8e8;border-radius:12px;padding:16px;margin-bottom:12px">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">' +
+      '<div style="display:flex;align-items:center;gap:10px">' +
+      '<div class="ava" style="background:' + colors[i%5] + ';color:' + tcolors[i%5] + ';width:42px;height:42px;font-size:15px">' + (p.prenom?.[0]||'') + (p.nom?.[0]||'') + '</div>' +
+      '<div><div style="font-weight:700;font-size:14px">' + (p.prenom||'') + ' ' + p.nom + '</div>' +
+      '<div style="font-size:11px;color:#999">📋 ' + (p.numero_matricule||'—') + ' · 📞 ' + (p.telephone||'—') + '</div></div></div>' +
+      '<div style="display:flex;align-items:center;gap:6px">' +
+      '<span style="font-size:12px;background:#E6F1FB;color:#0C447C;padding:3px 10px;border-radius:10px;font-weight:600">⏱ ' + (d.totalHeures > 0 ? d.totalHeures + 'h/sem' : '0h/sem') + '</span>' +
+      '<span class="badge ' + (p.actif?'badge-ok':'badge-err') + '">' + (p.actif?'Actif':'Inactif') + '</span></div></div>' +
+      '<div style="border-top:1px solid #f0f0f0;padding-top:10px;margin-bottom:10px">' +
+      '<div style="font-size:11px;color:#888;font-weight:600;margin-bottom:6px;text-transform:uppercase">Cours assignés</div>' +
+      coursHtml + '</div>' +
+      '<div style="display:flex;gap:6px;justify-content:flex-end">' +
+      '<button class="btn-sm" onclick="modifierProf(\'' + p.id + '\')">✏️ Modifier</button>' +
+      '<button class="btn-sm btn-danger" onclick="supprimerProf(\'' + p.id + '\',\'' + p.prenom + ' ' + p.nom + '\')">✕ Supprimer</button>' +
+      '</div></div>';
+  }).join('');
 }
 
 async function genererModalProf() {
@@ -1079,6 +1127,7 @@ async function genererModalProf() {
     '<div style="display:flex;gap:8px;margin-bottom:6px">' +
     '<select id="m-cours-classe" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:12px"><option value="">Classe...</option>' + classesOpts + '</select>' +
     '<select id="m-cours-matiere" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:12px"><option value="">Matière...</option>' + matieresOpts + '</select>' +
+    '<input id="m-cours-heures" type="number" min="1" max="40" placeholder="h/sem" style="width:70px;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:12px"/>' +
     '<button onclick="ajouterCoursTemp()" style="padding:8px 12px;background:#E1F5EE;color:#085041;border:1px solid #A8DFC9;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap">+ Ajouter</button>' +
     '</div>' +
     '<div id="cours-temp-list" style="display:flex;flex-wrap:wrap;gap:4px"></div>' +
@@ -1096,22 +1145,25 @@ function ajouterCoursTemp() {
   var classeNom = document.getElementById('m-cours-classe').options[document.getElementById('m-cours-classe').selectedIndex].text;
   var matiereId = document.getElementById('m-cours-matiere').value;
   var matiereNom = document.getElementById('m-cours-matiere').options[document.getElementById('m-cours-matiere').selectedIndex].text;
-  if (!classeId || !matiereId) return;
+  var heures = parseInt(document.getElementById('m-cours-heures')?.value || 0);
+  if (!classeId || !matiereId) return alert('Sélectionnez une classe et une matière.');
   var key = classeId + '_' + matiereId;
   if (window._coursTemp.find(function(c) { return c.key === key; })) return;
-  window._coursTemp.push({ key: key, classe_id: classeId, matiere_id: matiereId, label: matiereNom + ' / ' + classeNom });
+  var label = matiereNom + ' / ' + classeNom + (heures ? ' · ' + heures + 'h/sem' : '');
+  window._coursTemp.push({ key: key, classe_id: classeId, matiere_id: matiereId, heure_semaine: heures, label: label });
+  rafraichirCoursTemp();
+}
+
+function rafraichirCoursTemp() {
   document.getElementById('cours-temp-list').innerHTML = window._coursTemp.map(function(c) {
-    return '<span style="background:#E1F5EE;color:#085041;padding:3px 8px;border-radius:4px;font-size:11px;display:inline-flex;align-items:center;gap:4px">' +
-      c.label + '<span onclick="retirerCoursTemp(\'' + c.key + '\')" style="cursor:pointer;font-weight:bold;color:#A32D2D">✕</span></span>';
+    return '<span style="background:#E1F5EE;color:#085041;padding:3px 8px;border-radius:4px;font-size:11px;display:inline-flex;align-items:center;gap:4px;margin:2px">' +
+      c.label + ' <span onclick="retirerCoursTemp(\'' + c.key + '\')" style="cursor:pointer;font-weight:bold;color:#A32D2D">✕</span></span>';
   }).join('');
 }
 
 function retirerCoursTemp(key) {
   window._coursTemp = window._coursTemp.filter(function(c) { return c.key !== key; });
-  document.getElementById('cours-temp-list').innerHTML = window._coursTemp.map(function(c) {
-    return '<span style="background:#E1F5EE;color:#085041;padding:3px 8px;border-radius:4px;font-size:11px;display:inline-flex;align-items:center;gap:4px">' +
-      c.label + '<span onclick="retirerCoursTemp(\'' + c.key + '\')" style="cursor:pointer;font-weight:bold;color:#A32D2D">✕</span></span>';
-  }).join('');
+  rafraichirCoursTemp();
 }
 
 async function sauvegarderProf() {
@@ -1163,7 +1215,7 @@ async function sauvegarderProf() {
   // Assigner cours
   if (window._coursTemp && window._coursTemp.length > 0) {
     await db.from('cours_assignes').insert(window._coursTemp.map(function(c) {
-      return { ecole_id: ecoleId, prof_id: authId, classe_id: c.classe_id, matiere_id: c.matiere_id };
+      return { ecole_id: ecoleId, professeur_id: authId, classe_id: c.classe_id, matiere_id: c.matiere_id, heure_semaine: c.heure_semaine || 0 };
     }));
   }
 
@@ -1182,8 +1234,8 @@ async function modifierProf(id) {
   var { data: matieres } = await db.from('matieres').select('id,nom').eq('ecole_id', ecoleId).order('nom');
   matieres = matieres || [];
   var { data: coursExist } = await db.from('cours_assignes')
-    .select('id, classe_id, matiere_id, classes(nom), matieres(nom)')
-    .eq('prof_id', id);
+    .select('id, classe_id, matiere_id, heure_semaine, classes(nom), matieres(nom)')
+    .eq('professeur_id', id);
   coursExist = coursExist || [];
 
   var classesOpts = toutesClasses.map(function(c) {
@@ -1194,7 +1246,7 @@ async function modifierProf(id) {
   }).join('');
 
   window._coursTemp = coursExist.map(function(c) {
-    return { key: c.classe_id + '_' + c.matiere_id, classe_id: c.classe_id, matiere_id: c.matiere_id, label: (c.matieres?.nom||'—') + ' / ' + (c.classes?.nom||'—'), existId: c.id };
+    return { key: c.classe_id + '_' + c.matiere_id, classe_id: c.classe_id, matiere_id: c.matiere_id, heure_semaine: c.heure_semaine||0, label: (c.matieres?.nom||'—') + ' / ' + (c.classes?.nom||'—') + (c.heure_semaine ? ' · ' + c.heure_semaine + 'h/sem' : ''), existId: c.id };
   });
 
   document.getElementById('modal-content').innerHTML =
@@ -1241,10 +1293,10 @@ async function sauvegarderModifProf(id) {
   if (res.error) { showModalErr(res.error.message); return; }
 
   // Supprimer anciens cours et réinsérer
-  await db.from('cours_assignes').delete().eq('prof_id', id);
+  await db.from('cours_assignes').delete().eq('professeur_id', id);
   if (window._coursTemp && window._coursTemp.length > 0) {
     await db.from('cours_assignes').insert(window._coursTemp.map(function(c) {
-      return { ecole_id: ecoleId, prof_id: id, classe_id: c.classe_id, matiere_id: c.matiere_id };
+      return { ecole_id: ecoleId, professeur_id: id, classe_id: c.classe_id, matiere_id: c.matiere_id, heure_semaine: c.heure_semaine || 0 };
     }));
   }
 
@@ -1255,7 +1307,7 @@ async function sauvegarderModifProf(id) {
 
 async function supprimerProf(id, nom) {
   if (!confirm('Supprimer ' + nom + ' ? Tous ses cours assignés seront supprimés.')) return;
-  await db.from('cours_assignes').delete().eq('prof_id', id);
+  await db.from('cours_assignes').delete().eq('professeur_id', id);
   var res = await db.from('utilisateurs').delete().eq('id', id);
   if (res.error) { alert('Erreur : ' + res.error.message); return; }
   chargerProfesseurs();
@@ -1486,9 +1538,61 @@ async function chargerHeures() {
           '</tr>';
       }).join('');
 
-  document.getElementById('tbody-heures').innerHTML = html;
+  // Remplir filtre classes
+  var selClasse = document.getElementById('filter-classe-heures');
+  selClasse.innerHTML = '<option value="">Toutes les classes</option>';
+  toutesClasses.forEach(function(c) {
+    selClasse.innerHTML += '<option value="' + c.id + '">' + c.nom + '</option>';
+  });
+
+  // Stocker pour filtrage
+  tousProfsHeures = Object.entries(parProf).map(function([pid, p]) {
+    return Object.assign({ id: pid }, p);
+  });
+
+  afficherHeures(tousProfsHeures);
   document.getElementById('load-heures').style.display = 'none';
   document.getElementById('cont-heures').style.display = 'block';
+}
+var tousProfsHeures = [];
+
+function filtrerHeures() {
+  var search = (document.getElementById('search-heures').value || '').toLowerCase();
+  var classeId = document.getElementById('filter-classe-heures').value;
+
+  var filtered = tousProfsHeures.filter(function(p) {
+    var nom = ((p.info?.prenom||'') + ' ' + (p.info?.nom||'')).toLowerCase();
+    var mat = (p.info?.numero_matricule||'').toLowerCase();
+    var matchSearch = !search || nom.includes(search) || mat.includes(search);
+    var matchClasse = !classeId || p.cours.some(function(c) { return c.classe_id === classeId; });
+    return matchSearch && matchClasse;
+  });
+
+  afficherHeures(filtered);
+}
+
+function afficherHeures(parProfList) {
+  var html = parProfList.length === 0
+    ? '<tr><td colspan="5" style="text-align:center;padding:24px;color:#aaa">Aucun résultat</td></tr>'
+    : parProfList.map(function(p) {
+        var coursHtml = p.cours.length === 0
+          ? '<span style="color:#aaa;font-size:11px">Aucun cours assigné</span>'
+          : p.cours.map(function(c) {
+              return '<span style="background:#E1F5EE;color:#085041;padding:2px 6px;border-radius:4px;font-size:11px;margin:1px;display:inline-block">' +
+                (c.matieres?.nom||'—') + ' · ' + (c.classes?.nom||'—') +
+                (c.heures_semaine ? ' (' + c.heures_semaine + 'h/sem)' : '') +
+                '</span>';
+            }).join('');
+        return '<tr>' +
+          '<td><div style="font-weight:500">' + (p.info?.prenom||'') + ' ' + (p.info?.nom||'') + '</div>' +
+          '<div style="font-size:11px;color:#999">' + (p.info?.numero_matricule||'—') + '</div></td>' +
+          '<td style="max-width:250px">' + coursHtml + '</td>' +
+          '<td style="font-weight:600;color:#185FA5;text-align:center">' + (p.totalHeuresSemaine > 0 ? p.totalHeuresSemaine + 'h/sem' : '—') + '</td>' +
+          '<td style="font-size:12px;color:#888">' + (p.info?.telephone||'—') + '</td>' +
+          '<td><button class="btn-sm" onclick="modifierProf(\'' + p.id + '\')">Modifier</button></td>' +
+          '</tr>';
+      }).join('');
+  document.getElementById('tbody-heures').innerHTML = html;
 }
 
 // ============================================
