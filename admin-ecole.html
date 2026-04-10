@@ -1766,13 +1766,15 @@ async function supprimerParent(id, nom) {
 }
 
 async function ajouterEnfantParent(parentId) {
-  var { data: eleves } = await db.from('eleves').select('id,nom,prenom,classes(nom)').eq('ecole_id', ecoleId).order('nom');
-  var opts = (eleves||[]).map(function(e) {
-    return '<option value="' + e.id + '">' + (e.prenom||'') + ' ' + e.nom + ' (' + (e.classes?.nom||'Sans classe') + ')</option>';
+  var { data: eleves } = await db.from('eleves').select('id,nom,prenom,numero_matricule,classes(nom)').eq('ecole_id', ecoleId).order('nom');
+  _tousElevesSelect = eleves || [];
+  var opts = _tousElevesSelect.map(function(e) {
+    return '<option value="' + e.id + '">' + (e.prenom||'') + ' ' + e.nom + ' · ' + (e.numero_matricule||'—') + ' (' + (e.classes?.nom||'Sans classe') + ')</option>';
   }).join('');
   document.getElementById('modal-content').innerHTML =
     '<div class="modal-title">➕ Rattacher un enfant</div>' +
     '<div class="alert alert-err" id="m-err"></div>' +
+    '<input id="m-enfant-search" type="text" placeholder="Filtrer par nom ou matricule..." oninput="filtrerEnfantsSelectSimple()" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:12px;margin-bottom:8px"/>' +
     '<div class="field"><label>Sélectionner l\'élève</label>' +
     '<select id="m-enfant-id" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff"><option value="">Choisir...</option>' + opts + '</select></div>' +
     '<div class="modal-actions">' +
@@ -2029,8 +2031,11 @@ async function genererModalParent() {
     '<div class="field"><label>Téléphone ✱</label><input id="m-tel" type="tel" placeholder="620 000 000" maxlength="9"/></div>' +
     '<div style="background:#f9f9f9;border-radius:8px;padding:10px 12px;margin-bottom:12px">' +
     '<div style="font-size:12px;font-weight:600;color:#555;margin-bottom:8px">👶 Rattacher des enfants (optionnel)</div>' +
-    '<select id="m-enfant-sel" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:12px;margin-bottom:6px"><option value="">Sélectionner un élève...</option>' + opts + '</select>' +
+    '<input id="m-enfant-search" type="text" placeholder="Filtrer par nom ou matricule..." oninput="filtrerEnfantsSelect()" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:12px;margin-bottom:6px"/>' +
+    '<div style="display:flex;gap:6px">' +
+    '<select id="m-enfant-sel" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:12px"><option value="">Sélectionner un élève...</option>' + opts + '</select>' +
     '<button onclick="ajouterEnfantTemp()" style="padding:7px 12px;background:#E6F1FB;color:#0C447C;border:1px solid #ADD3F5;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">+ Ajouter</button>' +
+    '</div>' +
     '<div id="enfants-temp-list" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px"></div>' +
     '</div>' +
     '<div class="modal-actions">' +
@@ -2039,6 +2044,20 @@ async function genererModalParent() {
     '</div>';
   document.getElementById('modal-bg').classList.add('open');
   window._enfantsTemp = [];
+}
+var _tousElevesSelect = [];
+
+function filtrerEnfantsSelect() {
+  var search = (document.getElementById('m-enfant-search').value || '').toLowerCase();
+  var sel = document.getElementById('m-enfant-sel');
+  sel.innerHTML = '<option value="">Sélectionner un élève...</option>';
+  _tousElevesSelect.filter(function(e) {
+    var nom = ((e.prenom||'') + ' ' + e.nom).toLowerCase();
+    var mat = (e.numero_matricule||'').toLowerCase();
+    return !search || nom.includes(search) || mat.includes(search);
+  }).forEach(function(e) {
+    sel.innerHTML += '<option value="' + e.id + '">' + (e.prenom||'') + ' ' + e.nom + ' · ' + (e.numero_matricule||'—') + ' (' + (e.classes?.nom||'Sans classe') + ')</option>';
+  });
 }
 
 function ajouterEnfantTemp() {
