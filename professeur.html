@@ -397,6 +397,7 @@ let compData = {};
 
     const { data: u } = await db.from('utilisateurs').select('*, ecoles(*)').eq('id', session.user.id).maybeSingle();
     if (!u || u.role !== 'professeur') { window.location.href = 'index.html'; return; }
+    if (u.premiere_connexion) { await db.auth.signOut(); window.location.href = 'index.html'; return; }
 
     // Première connexion → rediriger
     if (u.premiere_connexion) {

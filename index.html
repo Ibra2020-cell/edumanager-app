@@ -298,17 +298,38 @@
 </div>
   <div id="form-oubli" style="display:none">
     <div style="background:#FFF8E6;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:#7A5200;border-left:3px solid #EF9F27">
-      <strong>🔑 Mot de passe oublié</strong><br>Entrez votre matricule et code établissement. Votre directeur recevra une demande de réinitialisation.
+      <strong>🔑 Mot de passe oublié</strong><br>Choisissez votre profil pour réinitialiser votre mot de passe.
     </div>
     <div id="err-oubli" class="error-msg"></div>
     <div id="ok-oubli" class="success-msg"></div>
-    <div class="field">
-      <label>Matricule</label>
-      <input id="o-matricule" type="text" placeholder="Ex : MA222222" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"/>
+
+    <!-- Switch type -->
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <button id="obtn-membre" onclick="setOubliType('membre')" style="flex:1;padding:7px;border-radius:8px;border:2px solid #EF9F27;background:#EF9F27;color:#fff;font-size:11px;font-weight:600;cursor:pointer">👤 Élève / Prof / Parent</button>
+      <button id="obtn-admin" onclick="setOubliType('admin')" style="flex:1;padding:7px;border-radius:8px;border:2px solid #ddd;background:#fff;color:#888;font-size:11px;font-weight:600;cursor:pointer">🏫 Directeur</button>
     </div>
-    <div class="field">
-      <label>Code établissement</label>
-      <input id="o-code" type="text" placeholder="Ex : LD-2026-642" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"/>
+
+    <!-- Champs membre -->
+    <div id="oubli-membre">
+      <div class="field">
+        <label>Matricule</label>
+        <input id="o-matricule" type="text" placeholder="Ex : MA222222" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"/>
+      </div>
+      <div class="field">
+        <label>Code établissement</label>
+        <input id="o-code" type="text" placeholder="Ex : LD-2026-642" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"/>
+      </div>
+    </div>
+
+    <!-- Champs directeur -->
+    <div id="oubli-admin" style="display:none">
+      <div style="background:#EEEDFE;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#3C3489">
+        🏫 Un lien de réinitialisation sera envoyé à votre adresse email.
+      </div>
+      <div class="field">
+        <label>Adresse email du directeur</label>
+        <input id="o-email-admin" type="email" placeholder="directeur@email.com"/>
+      </div>
     </div>
     <div class="field">
       <label>Nouveau mot de passe ✱</label>
@@ -326,10 +347,10 @@
         <button class="eye" onclick="toggle('o-mdp-confirm')" type="button" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px">👁</button>
       </div>
     </div>
-    <div style="background:#f9f9f9;border-radius:8px;padding:10px 12px;font-size:11px;color:#888;margin-bottom:12px">
-      ⚠️ Le directeur de votre école devra valider cette demande depuis son espace administrateur avant que vous puissiez vous connecter.
+    <div style="background:#f9f9f9;border-radius:8px;padding:10px 12px;font-size:11px;color:#888;margin-bottom:12px" id="oubli-note-membre">
+      ⚠️ Élève/Prof/Parent : entrez votre matricule et nouveau mot de passe souhaité.
     </div>
-    <button class="btn-login" onclick="demanderResetMdp()" style="width:100%">📩 Envoyer la demande</button>
+    <button class="btn-login" onclick="demanderResetMdp()" style="width:100%">📩 Réinitialiser mon mot de passe</button>
   </div>
 </div>
 
@@ -523,22 +544,31 @@ async function doPremiereConnexion() {
     var resUpdate = await db.auth.updateUser({ password: mdpNew });
     if (resUpdate.error) throw resUpdate.error;
 
+    // Mettre à jour premiere_connexion partout
     await db.from('utilisateurs').update({ premiere_connexion: false, mdp_temp: null }).eq('id', u.id);
-    // Mettre aussi à jour via auth_id au cas où
     await db.from('utilisateurs').update({ premiere_connexion: false, mdp_temp: null }).eq('auth_id', userId);
-    // Pour les élèves, mettre à jour aussi la table eleves
     await db.from('eleves').update({ premiere_connexion: false, mdp_temp: null }).eq('auth_id', userId);
-    localStorage.setItem('edu_user', JSON.stringify({ role: u.role, email: email, demo: false }));
+
+    // Déconnecter proprement puis reconnecter pour avoir une session fraîche
+    await db.auth.signOut();
 
     var ok = document.getElementById('err-premiere');
-    ok.textContent = '✅ Compte activé ! Redirection...';
+    ok.textContent = '✅ Compte activé ! Connectez-vous maintenant avec votre nouveau mot de passe.';
     ok.style.background = 'var(--accent-green-light)';
     ok.style.color = 'var(--accent-green)';
     ok.style.display = 'block';
 
+    // Revenir sur l'onglet connexion après 2 secondes
     setTimeout(function() {
-      window.location.href = { super_admin:'super-admin.html', admin_ecole:'admin-ecole.html', professeur:'professeur.html', parent:'parent.html', eleve:'eleve.html' }[u.role] || 'index.html';
-    }, 2000);
+      switchTab('login');
+      // Pré-remplir selon le rôle
+      if (u.role === 'admin_ecole') {
+        setTypeConnexion('admin');
+      } else {
+        setTypeConnexion('membre');
+      }
+      ok.style.display = 'none';
+    }, 2500);
 
   } catch(e) {
     showErr('err-premiere', e.message);
@@ -559,48 +589,67 @@ function checkForceOubli(mdp) {
   document.getElementById('force-txt-o').style.color = cfg.c;
 }
 
+var _oubliType = 'membre';
+
+function setOubliType(type) {
+  _oubliType = type;
+  document.getElementById('oubli-membre').style.display = type === 'membre' ? 'block' : 'none';
+  document.getElementById('oubli-admin').style.display = type === 'admin' ? 'block' : 'none';
+  document.getElementById('oubli-note-membre').style.display = type === 'membre' ? 'block' : 'none';
+  // Champs mdp visibles seulement pour membre
+  document.querySelector('#form-oubli .field:nth-last-child(3)').style.display = type === 'membre' ? 'block' : 'none';
+  document.querySelector('#form-oubli .field:nth-last-child(2)').style.display = type === 'membre' ? 'block' : 'none';
+  document.getElementById('obtn-membre').style.background = type === 'membre' ? '#EF9F27' : '#fff';
+  document.getElementById('obtn-membre').style.color = type === 'membre' ? '#fff' : '#888';
+  document.getElementById('obtn-membre').style.borderColor = type === 'membre' ? '#EF9F27' : '#ddd';
+  document.getElementById('obtn-admin').style.background = type === 'admin' ? '#7F77DD' : '#fff';
+  document.getElementById('obtn-admin').style.color = type === 'admin' ? '#fff' : '#888';
+  document.getElementById('obtn-admin').style.borderColor = type === 'admin' ? '#7F77DD' : '#ddd';
+}
+
 async function demanderResetMdp() {
-  var matricule = document.getElementById('o-matricule').value.trim().toUpperCase();
-  var code = document.getElementById('o-code').value.trim().toUpperCase();
-  var mdpNew = document.getElementById('o-mdp-new').value;
-  var mdpConfirm = document.getElementById('o-mdp-confirm').value;
-
-  if (!matricule||!code||!mdpNew||!mdpConfirm) return showErr('err-oubli','Remplissez tous les champs.');
-  if (mdpNew !== mdpConfirm) return showErr('err-oubli','Les mots de passe ne correspondent pas.');
-  if (mdpNew.length < 8) return showErr('err-oubli','Minimum 8 caractères.');
-  if (!/[A-Z]/.test(mdpNew)) return showErr('err-oubli','Ajoutez au moins une majuscule.');
-  if (!/[0-9]/.test(mdpNew)) return showErr('err-oubli','Ajoutez au moins un chiffre.');
-  if (!/[^A-Za-z0-9]/.test(mdpNew)) return showErr('err-oubli','Ajoutez au moins un symbole (!@#...).');
-
   var btn = document.querySelector('#form-oubli .btn-login');
   btn.disabled = true; btn.textContent = 'Envoi en cours...';
 
   try {
-    // Chercher l'utilisateur par matricule et école
-    var email = matricule.replace(/-/g,'').toLowerCase() + '@' + code.replace(/-/g,'').toLowerCase() + '.gn';
-    var { data: u } = await db.from('utilisateurs').select('id,nom,prenom,role,ecole_id').eq('numero_matricule', matricule).maybeSingle();
-    if (!u) {
-      var { data: eleve } = await db.from('eleves').select('id,nom,prenom,ecole_id,numero_matricule').eq('numero_matricule', matricule).maybeSingle();
-      if (!eleve) throw new Error('Matricule introuvable. Vérifiez votre matricule et code école.');
+    if (_oubliType === 'admin') {
+      // Directeur — envoyer lien par email
+      var emailAdmin = document.getElementById('o-email-admin').value.trim().toLowerCase();
+      if (!emailAdmin) { btn.disabled = false; btn.textContent = '📩 Réinitialiser mon mot de passe'; return showErr('err-oubli','Entrez votre adresse email.'); }
+      var resReset = await db.auth.resetPasswordForEmail(emailAdmin, {
+        redirectTo: window.location.origin + '/changer-mdp.html'
+      });
+      if (resReset.error) throw new Error('Email introuvable ou invalide.');
+      var ok = document.getElementById('ok-oubli');
+      ok.textContent = '✅ Un lien de réinitialisation a été envoyé à ' + emailAdmin + '. Vérifiez votre boîte mail.';
+      ok.style.display = 'block';
+      document.getElementById('err-oubli').style.display = 'none';
+    } else {
+      // Élève/Prof/Parent
+      var matricule = document.getElementById('o-matricule').value.trim().toUpperCase();
+      var code = document.getElementById('o-code').value.trim().toUpperCase();
+      var mdpNew = document.getElementById('o-mdp-new').value;
+      var mdpConfirm = document.getElementById('o-mdp-confirm').value;
+      if (!matricule||!code||!mdpNew||!mdpConfirm) { btn.disabled = false; btn.textContent = '📩 Réinitialiser mon mot de passe'; return showErr('err-oubli','Remplissez tous les champs.'); }
+      if (mdpNew !== mdpConfirm) { btn.disabled = false; btn.textContent = '📩 Réinitialiser mon mot de passe'; return showErr('err-oubli','Les mots de passe ne correspondent pas.'); }
+      if (mdpNew.length < 8) { btn.disabled = false; btn.textContent = '📩 Réinitialiser mon mot de passe'; return showErr('err-oubli','Minimum 8 caractères.'); }
+      if (!/[A-Z]/.test(mdpNew)) { btn.disabled = false; btn.textContent = '📩 Réinitialiser mon mot de passe'; return showErr('err-oubli','Ajoutez au moins une majuscule.'); }
+      if (!/[0-9]/.test(mdpNew)) { btn.disabled = false; btn.textContent = '📩 Réinitialiser mon mot de passe'; return showErr('err-oubli','Ajoutez au moins un chiffre.'); }
+      if (!/[^A-Za-z0-9]/.test(mdpNew)) { btn.disabled = false; btn.textContent = '📩 Réinitialiser mon mot de passe'; return showErr('err-oubli','Ajoutez au moins un symbole (!@#...).'); }
+      var email = matricule.replace(/[^a-zA-Z0-9]/g,'').toLowerCase() + '@' + code.replace(/[^a-zA-Z0-9]/g,'').toLowerCase() + '.gn';
+      var resReset = await db.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + '/changer-mdp.html'
+      });
+      if (resReset.error) throw new Error('Impossible de réinitialiser. Vérifiez votre matricule et code école.');
+      var ok = document.getElementById('ok-oubli');
+      ok.textContent = '✅ Lien envoyé ! Vérifiez votre email ou contactez votre directeur.';
+      ok.style.display = 'block';
+      document.getElementById('err-oubli').style.display = 'none';
     }
-    // Connexion avec email pour changer le mdp directement
-    var resSign = await db.auth.signInWithPassword({ email: email, password: mdpNew });
-    if (!resSign.error) {
-      // Le mdp est déjà correct — rediriger
-      window.location.href = ROLES[u?.role || eleve?.role || 'eleve'] || 'index.html';
-      return;
-    }
-    // Sinon envoyer reset par email Supabase
-    var resReset = await db.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/changer-mdp.html' });
-    if (resReset.error) throw new Error('Impossible de réinitialiser. Vérifiez votre matricule et code école.');
-    var ok = document.getElementById('ok-oubli');
-    ok.textContent = '✅ Un lien de réinitialisation a été envoyé. Contactez votre directeur si vous n\'avez pas d\'email.';
-    ok.style.display = 'block';
-    document.getElementById('err-oubli').style.display = 'none';
   } catch(e) {
     showErr('err-oubli', e.message);
   }
-  btn.disabled = false; btn.textContent = '📩 Envoyer la demande';
+  btn.disabled = false; btn.textContent = '📩 Réinitialiser mon mot de passe';
 }
 var _typeConnexion = 'membre';
 
