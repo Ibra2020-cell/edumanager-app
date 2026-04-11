@@ -190,26 +190,46 @@
     <div id="err-login" class="error-msg"></div>
     <div id="ok-login" class="success-msg"></div>
 
-    <div class="field">
-      <label>Numéro matricule</label>
-      <input type="text" id="l-matricule" placeholder="Ex : PRF-LD-26-001" style="text-transform:uppercase" onkeydown="if(event.key==='Enter')doLogin()"/>
-      <div class="field-note">📋 Matricule national guinéen — fourni par votre directeur</div>
+    <!-- Switch type connexion -->
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <button id="btn-type-membre" onclick="setTypeConnexion('membre')" style="flex:1;padding:8px;border-radius:8px;border:2px solid #185FA5;background:#185FA5;color:#fff;font-size:12px;font-weight:600;cursor:pointer">👤 Élève / Prof / Parent</button>
+      <button id="btn-type-admin" onclick="setTypeConnexion('admin')" style="flex:1;padding:8px;border-radius:8px;border:2px solid #ddd;background:#fff;color:#888;font-size:12px;font-weight:600;cursor:pointer">🏫 Directeur / Admin</button>
+    </div>
+
+    <!-- Formulaire membre (matricule) -->
+    <div id="login-membre">
+      <div class="field">
+        <label>Matricule ✱</label>
+        <input type="text" id="l-matricule" placeholder="Ex : GN-2024-00123456" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')doLogin()"/>
+        <div class="field-note">📋 Matricule national fourni par votre directeur</div>
+      </div>
+      <div class="field">
+        <label>Code établissement ✱</label>
+        <input type="text" id="l-code" placeholder="Ex : LD-2026-642" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')doLogin()"/>
+        <div class="field-note">🏫 Code fourni par votre école</div>
+      </div>
+    </div>
+
+    <!-- Formulaire admin (email) -->
+    <div id="login-admin" style="display:none">
+      <div style="background:#EEEDFE;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#3C3489;border-left:3px solid #7F77DD">
+        🔐 Espace réservé aux directeurs et administrateurs d'école.
+      </div>
+      <div class="field">
+        <label>Adresse email ✱</label>
+        <input type="email" id="l-email-admin" placeholder="directeur@email.com" onkeydown="if(event.key==='Enter')doLoginAdmin()"/>
+      </div>
     </div>
 
     <div class="field">
-      <label>Code établissement</label>
-      <input type="text" id="l-code" placeholder="Ex : LD-2026-642" style="text-transform:uppercase" onkeydown="if(event.key==='Enter')doLogin()"/>
-    </div>
-
-    <div class="field">
-      <label>Mot de passe</label>
+      <label>Mot de passe ✱</label>
       <div class="mdp-wrap">
-        <input type="password" id="l-mdp" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/>
+        <input type="password" id="l-mdp" placeholder="••••••••" onkeydown="if(event.key==='Enter')loginDispatch()"/>
         <button class="eye" onclick="toggle('l-mdp')" type="button">👁</button>
       </div>
     </div>
 
-    <button class="btn-login" id="btn-login" onclick="doLogin()">Se connecter</button>
+    <button class="btn-login" id="btn-login" onclick="loginDispatch()">Se connecter</button>
   </div>
 
   <!-- INSCRIPTION -->
@@ -548,33 +568,122 @@ async function demanderResetMdp() {
   }
   btn.disabled = false; btn.textContent = '📩 Envoyer la demande';
 }
-async function doLogin() {
-  const matricule = document.getElementById('l-matricule').value.trim().toUpperCase();
-  const code = document.getElementById('l-code').value.trim().toUpperCase();
-  const mdp = document.getElementById('l-mdp').value;
-  if (!matricule || !code || !mdp) return showErr('err-login', 'Veuillez remplir tous les champs.');
-  const email = matricule.replace(/-/g,'').toLowerCase() + '@' + code.replace(/-/g,'').toLowerCase() + '.gn';
-  const btn = document.getElementById('btn-login');
+var _typeConnexion = 'membre';
+
+function setTypeConnexion(type) {
+  _typeConnexion = type;
+  document.getElementById('login-membre').style.display = type === 'membre' ? 'block' : 'none';
+  document.getElementById('login-admin').style.display = type === 'admin' ? 'block' : 'none';
+  document.getElementById('btn-type-membre').style.background = type === 'membre' ? '#185FA5' : '#fff';
+  document.getElementById('btn-type-membre').style.color = type === 'membre' ? '#fff' : '#888';
+  document.getElementById('btn-type-membre').style.borderColor = type === 'membre' ? '#185FA5' : '#ddd';
+  document.getElementById('btn-type-admin').style.background = type === 'admin' ? '#7F77DD' : '#fff';
+  document.getElementById('btn-type-admin').style.color = type === 'admin' ? '#fff' : '#888';
+  document.getElementById('btn-type-admin').style.borderColor = type === 'admin' ? '#7F77DD' : '#ddd';
+}
+
+function loginDispatch() {
+  if (_typeConnexion === 'admin') {
+    doLoginAdmin();
+  } else {
+    doLogin();
+  }
+}
+
+async function doLoginAdmin() {
+  var email = document.getElementById('l-email-admin').value.trim().toLowerCase();
+  var mdp = document.getElementById('l-mdp').value;
+  if (!email || !mdp) return showErr('err-login', 'Email et mot de passe obligatoires.');
+
+  var btn = document.getElementById('btn-login');
   btn.disabled = true; btn.textContent = 'Connexion en cours...';
+
   try {
-    const { data, error } = await db.auth.signInWithPassword({ email, password: mdp });
+    var { data, error } = await db.auth.signInWithPassword({ email: email, password: mdp });
     if (error) throw error;
-    let { data: u } = await db.from('utilisateurs').select('role, nom, prenom, ecole_id, premiere_connexion').eq('id', data.user.id).maybeSingle();
+
+    var u = null;
+    var res1 = await db.from('utilisateurs').select('role, nom, prenom, ecole_id, premiere_connexion').eq('id', data.user.id).maybeSingle();
+    u = res1.data;
     if (!u) {
-      const { data: u2 } = await db.from('utilisateurs').select('role, nom, prenom, ecole_id, premiere_connexion').eq('auth_id', data.user.id).maybeSingle();
-      u = u2;
+      var res2 = await db.from('utilisateurs').select('role, nom, prenom, ecole_id, premiere_connexion').eq('auth_id', data.user.id).maybeSingle();
+      u = res2.data;
     }
-    if (!u) {
-      if (email === 'ibra-cisse@outlook.fr') {
-        await db.from('utilisateurs').upsert({ id: data.user.id, nom: 'Cissé', prenom: 'Ibrahima', email, role: 'super_admin', actif: true });
-        localStorage.setItem('edu_user', JSON.stringify({ role:'super_admin', nom:'Cissé', prenom:'Ibrahima', email }));
-        window.location.href = 'super-admin.html'; return;
-      }
-      throw new Error('Profil introuvable. Contactez votre directeur.');
+
+    // Super admin
+    if (!u && email === 'ibra-cisse@outlook.fr') {
+      await db.from('utilisateurs').upsert({ id: data.user.id, nom: 'Cissé', prenom: 'Ibrahima', email: email, role: 'super_admin', actif: true });
+      localStorage.setItem('edu_user', JSON.stringify({ role:'super_admin', nom:'Cissé', prenom:'Ibrahima', email: email }));
+      window.location.href = 'super-admin.html'; return;
     }
+
+    if (!u) throw new Error('Profil introuvable. Contactez le super administrateur.');
+
+    // Vérifier que c'est bien un admin ou super admin
+    if (u.role !== 'admin_ecole' && u.role !== 'super_admin') {
+      await db.auth.signOut();
+      throw new Error('Ce compte n\'est pas un compte directeur. Utilisez l\'onglet Élève/Prof/Parent.');
+    }
+
     await db.from('utilisateurs').update({ derniere_connexion: new Date().toISOString() }).eq('id', data.user.id);
-    localStorage.setItem('edu_user', JSON.stringify({ role: u.role, nom: u.nom, prenom: u.prenom, ecole_id: u.ecole_id, email, demo: false }));
-    window.location.href = u.premiere_connexion ? 'changer-mdp.html' : (ROLES[u.role] || 'index.html');
+    localStorage.setItem('edu_user', JSON.stringify({ role: u.role, nom: u.nom, prenom: u.prenom, ecole_id: u.ecole_id, email: email, demo: false }));
+
+    if (u.premiere_connexion) {
+      await db.auth.signOut();
+      switchTab('premiere');
+      return;
+    }
+
+    window.location.href = ROLES[u.role] || 'index.html';
+
+  } catch(e) {
+    showErr('err-login', e.message === 'Invalid login credentials' ? '❌ Email ou mot de passe incorrect.' : e.message);
+  }
+  btn.disabled = false; btn.textContent = 'Se connecter';
+}
+
+async function doLogin() {
+  var matricule = document.getElementById('l-matricule').value.trim().toUpperCase();
+  var code = document.getElementById('l-code').value.trim().toUpperCase();
+  var mdp = document.getElementById('l-mdp').value;
+  if (!matricule || !code || !mdp) return showErr('err-login', 'Veuillez remplir tous les champs.');
+
+  var btn = document.getElementById('btn-login');
+  btn.disabled = true; btn.textContent = 'Connexion en cours...';
+
+  try {
+    // Email interne généré — jamais exposé à l'utilisateur
+    var email = matricule.replace(/-/g,'').toLowerCase() + '@' + code.replace(/-/g,'').toLowerCase() + '.gn';
+
+    var { data, error } = await db.auth.signInWithPassword({ email: email, password: mdp });
+    if (error) throw error;
+
+    var u = null;
+    var res1 = await db.from('utilisateurs').select('role, nom, prenom, ecole_id, premiere_connexion').eq('id', data.user.id).maybeSingle();
+    u = res1.data;
+    if (!u) {
+      var res2 = await db.from('utilisateurs').select('role, nom, prenom, ecole_id, premiere_connexion').eq('auth_id', data.user.id).maybeSingle();
+      u = res2.data;
+    }
+    if (!u) throw new Error('Profil introuvable. Contactez votre directeur.');
+
+    // Bloquer les admins qui tentent de passer par ici
+    if (u.role === 'admin_ecole' || u.role === 'super_admin') {
+      await db.auth.signOut();
+      throw new Error('Utilisez l\'onglet Directeur/Admin pour vous connecter.');
+    }
+
+    await db.from('utilisateurs').update({ derniere_connexion: new Date().toISOString() }).eq('id', data.user.id);
+    localStorage.setItem('edu_user', JSON.stringify({ role: u.role, nom: u.nom, prenom: u.prenom, ecole_id: u.ecole_id, email: email, demo: false }));
+
+    if (u.premiere_connexion) {
+      await db.auth.signOut();
+      switchTab('premiere');
+      return;
+    }
+
+    window.location.href = ROLES[u.role] || 'index.html';
+
   } catch(e) {
     showErr('err-login', e.message === 'Invalid login credentials' ? '❌ Matricule, code école ou mot de passe incorrect.' : e.message);
   }
