@@ -501,35 +501,18 @@ let appelData = {};
 // INITIALISATION
 // ============================================
 (async () => {
-  const demo = JSON.parse(localStorage.getItem('edu_user') || '{}');
-
-  if (demo.role === 'admin_ecole') {
-    currentUser = { ...demo, demo: true };
-    // En mode démo, utiliser la première école disponible
-    const { data: ecoles } = await db.from('ecoles').select('*').limit(1);
-    if (ecoles && ecoles.length > 0) {
-      ecoleId = ecoles[0].id;
-      document.getElementById('school-name').textContent = ecoles[0].nom;
-      codeEcole = ecoles[0].code_acces || '';
-    } else {
-      document.getElementById('school-name').textContent = 'Aucune école';
-    }
-    document.getElementById('user-name').textContent = demo.nom || 'Admin';
-    document.getElementById('user-initials').textContent = (demo.nom||'A').split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase();
-  } else {
-    try {
-      const { data: { session } } = await db.auth.getSession();
-      if (!session) { window.location.href = 'index.html'; return; }
-      const { data: u } = await db.from('utilisateurs').select('*, ecoles(*)').eq('id', session.user.id).maybeSingle();
-      if (!u || u.role !== 'admin_ecole') { window.location.href = 'index.html'; return; }
-      currentUser = u;
-      ecoleId = u.ecole_id;
-      document.getElementById('school-name').textContent = u.ecoles?.nom || 'Mon école';
-      codeEcole = u.ecoles?.code_acces || '';
-      document.getElementById('user-name').textContent = `${u.prenom} ${u.nom}`;
-      document.getElementById('user-initials').textContent = `${u.prenom?.[0]||''}${u.nom?.[0]||''}`.toUpperCase();
-    } catch(e) { window.location.href = 'index.html'; return; }
-  }
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    if (!session) { window.location.href = 'index.html'; return; }
+    const { data: u } = await db.from('utilisateurs').select('*, ecoles(*)').eq('id', session.user.id).maybeSingle();
+    if (!u || u.role !== 'admin_ecole') { window.location.href = 'index.html'; return; }
+    currentUser = u;
+    ecoleId = u.ecole_id;
+    document.getElementById('school-name').textContent = u.ecoles?.nom || 'Mon école';
+    codeEcole = u.ecoles?.code_acces || '';
+    document.getElementById('user-name').textContent = (u.prenom||'') + ' ' + u.nom;
+    document.getElementById('user-initials').textContent = ((u.prenom?.[0]||'') + (u.nom?.[0]||'')).toUpperCase();
+  } catch(e) { window.location.href = 'index.html'; return; }
 
   await chargerDashboard();
 })();
