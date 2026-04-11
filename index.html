@@ -354,14 +354,10 @@ const ROLES = {
         u = u2;
       }
       if (u?.role) {
-        // Si premiere_connexion → déconnecter et forcer l'onglet première connexion
+        // Si premiere_connexion → déconnecter et rester sur index
         if (u.premiere_connexion) {
           await db.auth.signOut();
           switchTab('premiere');
-          document.getElementById('form-premiere').innerHTML =
-            '<div style="background:#FFF3CD;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:#7A5200;border-left:3px solid #EF9F27">' +
-            '⚠️ <strong>Première connexion détectée.</strong><br>Vous devez activer votre compte avant de continuer. Remplissez le formulaire ci-dessous.' +
-            '</div>' + document.getElementById('form-premiere').innerHTML;
           return;
         }
         localStorage.setItem('edu_user', JSON.stringify({ role: u.role, nom: u.nom, prenom: u.prenom, email: session.user.email }));
@@ -528,6 +524,10 @@ async function doPremiereConnexion() {
     if (resUpdate.error) throw resUpdate.error;
 
     await db.from('utilisateurs').update({ premiere_connexion: false, mdp_temp: null }).eq('id', u.id);
+    // Mettre aussi à jour via auth_id au cas où
+    await db.from('utilisateurs').update({ premiere_connexion: false, mdp_temp: null }).eq('auth_id', userId);
+    // Pour les élèves, mettre à jour aussi la table eleves
+    await db.from('eleves').update({ premiere_connexion: false, mdp_temp: null }).eq('auth_id', userId);
     localStorage.setItem('edu_user', JSON.stringify({ role: u.role, email: email, demo: false }));
 
     var ok = document.getElementById('err-premiere');

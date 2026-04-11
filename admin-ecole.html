@@ -540,8 +540,8 @@ function genererMatriculeParent(code, annee, seq) {
   return `PAR-${c}-${a}-${String(seq).padStart(3,'0')}`;
 }
 function genererEmail(matricule, code) {
-  var mat = matricule.replace(/-/g, '').toLowerCase();
-  var c = (code||'').replace(/-/g, '').toLowerCase();
+  var mat = matricule.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+  var c = (code||'').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
   return mat + '@' + c + '.gn';
 }
 

@@ -243,6 +243,12 @@ let avisRatings = {};
     if (!session) { window.location.href = 'index.html'; return; }
     const { data: u } = await db.from('utilisateurs').select('*, ecoles(*)').eq('id', session.user.id).maybeSingle();
     if (!u || u.role !== 'eleve') { window.location.href = 'index.html'; return; }
+    // Si premiere connexion encore active → déconnecter proprement
+    if (u.premiere_connexion) {
+      await db.auth.signOut();
+      window.location.href = 'index.html';
+      return;
+    }
     currentUser = u; ecoleId = u.ecole_id;
     document.getElementById('school-name').textContent = u.ecoles?.nom || '';
     localStorage.setItem('edu_user', JSON.stringify({ role: u.role, nom: u.nom, prenom: u.prenom, email: session.user.email, demo: false }));
