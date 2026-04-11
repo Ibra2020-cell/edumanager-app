@@ -233,19 +233,37 @@
   </div>
 
   <!-- INSCRIPTION -->
-   <!-- PREMIERE CONNEXION -->
+  <!-- PREMIERE CONNEXION -->
 <div id="form-premiere" style="display:none">
   <div style="background:#E6F1FB;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:#0C447C;border-left:3px solid #185FA5">
-    <strong>🔐 Première connexion</strong><br>Entrez votre matricule, code établissement et mot de passe temporaire fourni par votre directeur.
+    <strong>🔐 Première connexion</strong><br>Activez votre compte et choisissez un mot de passe personnel.
   </div>
-  <div id="err-premiere" class="error"></div>
-  <div class="field">
-    <label>Matricule</label>
-    <input id="p-matricule" type="text" placeholder="Ex : MA222222" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"/>
+  <div id="err-premiere" class="error-msg"></div>
+
+  <!-- Switch type -->
+  <div style="display:flex;gap:8px;margin-bottom:16px">
+    <button id="pbtn-membre" onclick="setPremType('membre')" style="flex:1;padding:7px;border-radius:8px;border:2px solid #185FA5;background:#185FA5;color:#fff;font-size:11px;font-weight:600;cursor:pointer">👤 Élève / Prof / Parent</button>
+    <button id="pbtn-admin" onclick="setPremType('admin')" style="flex:1;padding:7px;border-radius:8px;border:2px solid #ddd;background:#fff;color:#888;font-size:11px;font-weight:600;cursor:pointer">🏫 Directeur</button>
   </div>
-  <div class="field">
-    <label>Code établissement</label>
-    <input id="p-code" type="text" placeholder="Ex : LD-2026-642" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"/>
+
+  <!-- Champs membre -->
+  <div id="prem-membre">
+    <div class="field">
+      <label>Matricule</label>
+      <input id="p-matricule" type="text" placeholder="Ex : MA222222" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"/>
+    </div>
+    <div class="field">
+      <label>Code établissement</label>
+      <input id="p-code" type="text" placeholder="Ex : LD-2026-642" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"/>
+    </div>
+  </div>
+
+  <!-- Champs admin/directeur -->
+  <div id="prem-admin" style="display:none">
+    <div class="field">
+      <label>Email du directeur</label>
+      <input id="p-email-admin" type="email" placeholder="directeur@email.com"/>
+    </div>
   </div>
   <div class="field">
     <label>Mot de passe temporaire</label>
@@ -453,47 +471,63 @@ function checkForcePremiereConnexion(mdp) {
   document.getElementById('force-txt-p').style.color = cfg.c;
 }
 
+var _premType = 'membre';
+
+function setPremType(type) {
+  _premType = type;
+  document.getElementById('prem-membre').style.display = type === 'membre' ? 'block' : 'none';
+  document.getElementById('prem-admin').style.display = type === 'admin' ? 'block' : 'none';
+  document.getElementById('pbtn-membre').style.background = type === 'membre' ? '#185FA5' : '#fff';
+  document.getElementById('pbtn-membre').style.color = type === 'membre' ? '#fff' : '#888';
+  document.getElementById('pbtn-membre').style.borderColor = type === 'membre' ? '#185FA5' : '#ddd';
+  document.getElementById('pbtn-admin').style.background = type === 'admin' ? '#7F77DD' : '#fff';
+  document.getElementById('pbtn-admin').style.color = type === 'admin' ? '#fff' : '#888';
+  document.getElementById('pbtn-admin').style.borderColor = type === 'admin' ? '#7F77DD' : '#ddd';
+}
+
 async function doPremiereConnexion() {
-  var matricule = document.getElementById('p-matricule').value.trim().toUpperCase();
-  var code = document.getElementById('p-code').value.trim().toUpperCase();
   var mdpTemp = document.getElementById('p-mdp').value;
   var mdpNew = document.getElementById('p-mdp-new').value;
   var mdpConfirm = document.getElementById('p-mdp-confirm').value;
+  var email = '';
 
-  if (!matricule||!code||!mdpTemp||!mdpNew||!mdpConfirm) return showErr('err-premiere','Remplissez tous les champs.');
+  if (_premType === 'admin') {
+    var emailAdmin = document.getElementById('p-email-admin').value.trim().toLowerCase();
+    if (!emailAdmin || !mdpTemp || !mdpNew || !mdpConfirm) return showErr('err-premiere','Remplissez tous les champs.');
+    email = emailAdmin;
+  } else {
+    var matricule = document.getElementById('p-matricule').value.trim().toUpperCase();
+    var code = document.getElementById('p-code').value.trim().toUpperCase();
+    if (!matricule || !code || !mdpTemp || !mdpNew || !mdpConfirm) return showErr('err-premiere','Remplissez tous les champs.');
+    email = matricule.replace(/-/g,'').toLowerCase() + '@' + code.replace(/-/g,'').toLowerCase() + '.gn';
+  }
+
   if (mdpNew !== mdpConfirm) return showErr('err-premiere','Les mots de passe ne correspondent pas.');
-  if (mdpNew.length < 8) return showErr('err-premiere','Le mot de passe doit faire au moins 8 caractères.');
+  if (mdpNew.length < 8) return showErr('err-premiere','Minimum 8 caractères.');
   if (!/[A-Z]/.test(mdpNew)) return showErr('err-premiere','Ajoutez au moins une majuscule.');
   if (!/[0-9]/.test(mdpNew)) return showErr('err-premiere','Ajoutez au moins un chiffre.');
   if (!/[^A-Za-z0-9]/.test(mdpNew)) return showErr('err-premiere','Ajoutez au moins un symbole (!@#...).');
-
-  var email = matricule.replace(/-/g,'').toLowerCase() + '@' + code.replace(/-/g,'').toLowerCase() + '.gn';
 
   var btn = document.querySelector('#form-premiere .btn-login');
   btn.disabled = true; btn.textContent = 'Vérification...';
 
   try {
-    // Connexion avec mdp temporaire
     var res = await db.auth.signInWithPassword({ email: email, password: mdpTemp });
-    if (res.error) throw new Error('Matricule, code école ou mot de passe temporaire incorrect.');
+    if (res.error) throw new Error(_premType === 'admin' ? 'Email ou mot de passe temporaire incorrect.' : 'Matricule, code école ou mot de passe temporaire incorrect.');
 
-    // Vérifier premiere_connexion
     var userId = res.data.user.id;
     var { data: u } = await db.from('utilisateurs').select('id,role,premiere_connexion').eq('id', userId).maybeSingle();
     if (!u) {
       var { data: u2 } = await db.from('utilisateurs').select('id,role,premiere_connexion').eq('auth_id', userId).maybeSingle();
       u = u2;
     }
-    if (!u) throw new Error('Profil introuvable. Contactez votre directeur.');
+    if (!u) throw new Error('Profil introuvable. Contactez votre administrateur.');
     if (!u.premiere_connexion) throw new Error('Ce compte a déjà été activé. Utilisez l\'onglet Connexion.');
 
-    // Changer le mot de passe
     var resUpdate = await db.auth.updateUser({ password: mdpNew });
     if (resUpdate.error) throw resUpdate.error;
 
-    // Mettre à jour premiere_connexion
     await db.from('utilisateurs').update({ premiere_connexion: false, mdp_temp: null }).eq('id', u.id);
-
     localStorage.setItem('edu_user', JSON.stringify({ role: u.role, email: email, demo: false }));
 
     var ok = document.getElementById('err-premiere');
