@@ -417,7 +417,17 @@ let compData = {};
     document.getElementById('user-initials').textContent = ((u.prenom?.[0]||'')+(u.nom?.[0]||'')).toUpperCase();
     document.getElementById('user-role').textContent = 'Professeur';
 
-  } catch(e) { window.location.href = 'index.html'; return; }
+  } catch(e) {
+    console.error('Erreur init:', e.message);
+    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#f0f0eb;font-family:sans-serif">' +
+      '<div style="background:#fff;border-radius:14px;padding:32px;max-width:400px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,0.1)">' +
+      '<div style="font-size:48px;margin-bottom:16px">⚠️</div>' +
+      '<div style="font-size:16px;font-weight:700;margin-bottom:8px">Erreur de connexion</div>' +
+      '<div style="font-size:13px;color:#888;margin-bottom:20px">' + e.message + '</div>' +
+      '<a href="index.html" style="display:inline-block;padding:12px 24px;background:#185FA5;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">→ Retour à la connexion</a>' +
+      '</div></div>';
+    return;
+  }
 
   const nom = currentUser.nom || 'Professeur';
   const prenom = currentUser.prenom || '';
@@ -815,7 +825,7 @@ async function chargerDevoirs() {
   if (!profId) return;
   var { data: cours } = await db.from('cours_assignes')
     .select('classe_id, matiere_id, classes(nom), matieres(nom)')
-    .eq('prof_id', profId);
+    .eq('professeur_id', profId);
   var sel = document.getElementById('dev-classe');
   sel.innerHTML = '<option value="">Sélectionner une classe...</option>';
   var selMat = document.getElementById('dev-matiere');
@@ -862,7 +872,7 @@ async function publierDevoir() {
 
   var res = await db.from('devoirs').insert([{
     ecole_id: ecoleId,
-    prof_id: profId,
+    professeur_id: profId,
     classe_id: classeId,
     matiere_id: matiereId || null,
     titre: titre || desc.substring(0,40),
@@ -881,7 +891,7 @@ async function chargerListeDevoirs() {
   if (!profId) return;
   var { data } = await db.from('devoirs')
     .select('*, classes(nom), matieres(nom)')
-    .eq('prof_id', profId)
+    .eq('professeur_id', profId)
     .order('created_at', { ascending: false });
 
   document.getElementById('liste-devoirs').innerHTML = (data||[]).length === 0

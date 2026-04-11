@@ -53,16 +53,41 @@ function genererMatriculeEleve(code, annee, seq) {
   return `ELV-${c}-${a}-${String(seq).padStart(4, '0')}`;
 }
 
-function genererMatriculeProfesseur(code, annee, seq) {
-  const c = (code || 'ECO').split('-')[0].substring(0, 3).toUpperCase();
-  const a = String(annee || new Date().getFullYear()).slice(-2);
-  return `PRF-${c}-${a}-${String(seq).padStart(3, '0')}`;
+function genererMatriculePersonne(nom, sexe, dateNaissance, seq) {
+  // 2 premières lettres du nom
+  var nomClean = (nom || 'XX').replace(/[^a-zA-Z]/g, '').toUpperCase();
+  var prefix = (nomClean + 'XX').substring(0, 2);
+  
+  // Genre : 1=féminin, 2=masculin
+  var genre = (sexe === 'F' || sexe === 'f') ? '1' : '2';
+  
+  // Coder la date de naissance
+  var code = 'XXXX';
+  if (dateNaissance) {
+    var d = new Date(dateNaissance);
+    var jour = d.getDate();
+    var mois = d.getMonth() + 1;
+    var annee = d.getFullYear() % 100;
+    var charset = '0123456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+    var c1 = charset[(jour * 3) % 34];
+    var c2 = charset[(mois + jour) % 34];
+    var c3 = charset[(annee * 7) % 34];
+    var c4 = charset[((jour + mois) * 5) % 34];
+    code = '' + c1 + c2 + c3 + c4;
+  }
+  
+  // Séquence 4 chiffres
+  var sequence = String(seq || 1).padStart(4, '0');
+  
+  return prefix + genre + code + sequence;
 }
 
-function genererMatriculeParent(code, annee, seq) {
-  const c = (code || 'ECO').split('-')[0].substring(0, 3).toUpperCase();
-  const a = String(annee || new Date().getFullYear()).slice(-2);
-  return `PAR-${c}-${a}-${String(seq).padStart(3, '0')}`;
+function genererMatriculeProfesseur(nom, sexe, dateNaissance, seq) {
+  return genererMatriculePersonne(nom, sexe, dateNaissance, seq);
+}
+
+function genererMatriculeParent(nom, sexe, dateNaissance, seq) {
+  return genererMatriculePersonne(nom, sexe, dateNaissance, seq);
 }
 
 async function validerPaiement(paiementId, adminId, ecoleId, plan) {

@@ -1034,7 +1034,9 @@ async function sauvegarderParent() {
 
   // Générer matricule
   var { count } = await db.from('utilisateurs').select('id', { count: 'exact' }).eq('ecole_id', ecoleId).eq('role', 'parent');
-  var mat = genererMatriculeParent(codeEcole, new Date().getFullYear(), (count||0) + 1);
+  var sexeParent = document.getElementById('m-sexe-parent')?.value || 'M';
+  var ddnParent = document.getElementById('m-ddn-parent')?.value || '';
+  var mat = genererMatriculeParent(nom, sexeParent, ddnParent, (count||0) + 1);
   var emailInterne = genererEmail(mat, codeEcole);
   var mdpTemp = genererMotDePasse(mat);
 
@@ -1537,6 +1539,10 @@ async function genererModalProf() {
     '<div class="field"><label>Prénom ✱</label><input id="m-prenom" type="text" placeholder="Moussa"/></div>' +
     '<div class="field"><label>Nom ✱</label><input id="m-nom" type="text" placeholder="Sylla"/></div>' +
     '</div>' +
+    '<div class="field-grid">' +
+    '<div class="field"><label>Date de naissance ✱</label><input id="m-ddn-prof" type="date"/></div>' +
+    '<div class="field"><label>Sexe ✱</label><select id="m-sexe-prof" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff"><option value="M">Masculin</option><option value="F">Féminin</option></select></div>' +
+    '</div>' +
     '<div class="field"><label>Téléphone</label><input id="m-tel" type="tel" placeholder="620 000 000" maxlength="9"/></div>' +
     '<div style="background:#f9f9f9;border-radius:8px;padding:10px 12px;margin-bottom:12px">' +
     '<div style="font-size:12px;font-weight:600;color:#555;margin-bottom:8px">📚 Assigner des cours (optionnel)</div>' +
@@ -1597,7 +1603,9 @@ async function sauvegarderProf() {
 
   // Générer matricule
   var { count } = await db.from('utilisateurs').select('id', { count: 'exact' }).eq('ecole_id', ecoleId).eq('role', 'professeur');
-  var mat = genererMatriculeProfesseur(codeEcole, new Date().getFullYear(), (count||0) + 1);
+  var sexeProf = document.getElementById('m-sexe-prof')?.value || 'M';
+  var ddnProf = document.getElementById('m-ddn-prof')?.value || '';
+  var mat = genererMatriculeProfesseur(nom, sexeProf, ddnProf, (count||0) + 1);
 
   var emailInterne = genererEmail(mat, codeEcole);
   var mdpTemp = genererMotDePasse(mat);
@@ -2528,6 +2536,10 @@ async function genererModalEleve() {
     '<div class="field-grid">' +
     '<div class="field"><label>Prénom ✱</label><input id="m-prenom" type="text" placeholder="Sita"/></div>' +
     '<div class="field"><label>Nom ✱</label><input id="m-nom" type="text" placeholder="Sanoh"/></div>' +
+    '</div>' +
+    '<div class="field-grid">' +
+    '<div class="field"><label>Date de naissance ✱</label><input id="m-ddn-parent" type="date"/></div>' +
+    '<div class="field"><label>Sexe ✱</label><select id="m-sexe-parent" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff"><option value="M">Masculin</option><option value="F">Féminin</option></select></div>' +
     '</div>' +
     '<div class="field"><label>Téléphone ✱</label><input id="m-tel" type="tel" placeholder="620 000 000" maxlength="9"/></div>' +
     '<div style="background:#f9f9f9;border-radius:8px;padding:10px 12px;margin-bottom:12px">' +
