@@ -246,7 +246,13 @@ let avisRatings = {};
     // Si premiere connexion encore active → déconnecter proprement
     if (u.premiere_connexion) {
       await db.auth.signOut();
-      window.location.href = 'index.html';
+      document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#f0f0eb;font-family:sans-serif">' +
+        '<div style="background:#fff;border-radius:14px;padding:32px;max-width:400px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,0.1)">' +
+        '<div style="font-size:48px;margin-bottom:16px">🔐</div>' +
+        '<div style="font-size:18px;font-weight:700;margin-bottom:8px">Première connexion requise</div>' +
+        '<div style="font-size:13px;color:#888;margin-bottom:20px">Vous devez activer votre compte avant d\'accéder à votre espace.</div>' +
+        '<a href="index.html" style="display:inline-block;padding:12px 24px;background:#185FA5;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">→ Aller sur la page de connexion</a>' +
+        '</div></div>';
       return;
     }
     currentUser = u; ecoleId = u.ecole_id;
