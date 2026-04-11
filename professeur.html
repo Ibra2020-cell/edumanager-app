@@ -6,6 +6,7 @@
   <title>EduManager — Professeur</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="stylesheet" href="shared-styles.css"/>
+  <script src="toast.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f0eb; color: #1a1a1a; }
@@ -92,14 +93,12 @@
      .hamburger { display:none; background:none; border:none; cursor:pointer; font-size:24px; padding:4px 8px; }
 
 @media (max-width: 768px) {
-  .sidebar { position:fixed; left:-260px; top:0; height:100%; z-index:200; transition:left 0.3s; box-shadow:2px 0 16px rgba(0,0,0,0.15); }
-  .sidebar.open { left:0; }
-  .sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:199; }
-  .sidebar-overlay.open { display:block; }
-  .hamburger { display:inline-block !important; }
+  .sidebar { transform: translateX(-100%); }
+  .sidebar.open { transform: translateX(0); box-shadow: 4px 0 24px rgba(0,0,0,0.25); }
+  .sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:199; }
+  .sidebar-overlay.active { display:block; }
+  .hamburger { display:flex !important; align-items:center; justify-content:center; }
   .main { margin-left:0 !important; }
-  .topbar { display:flex; align-items:center; gap:8px; }
-  .topbar-actions { display:none; }
 }
   </style>
 </head>
@@ -354,7 +353,7 @@
           </div>
           <div class="field"><label>Objet</label><input type="text" id="msg-objet" placeholder="Ex: Résultats du contrôle"/></div>
           <div class="field"><label>Message</label><textarea id="msg-contenu" style="height:80px;resize:vertical" placeholder="Votre message..."></textarea></div>
-          <button class="btn btn-primary" onclick="alert('Message envoyé !')">Envoyer</button>
+          <button class="btn btn-primary" onclick="toastOk('Message envoyé !')">Envoyer</button>
         </div>
         <div class="card">
           <div class="card-title">Messages reçus</div>
@@ -458,13 +457,15 @@ const pageMeta = {
 };
 
 function toggleSidebar() {
-  document.querySelector('.sidebar').classList.toggle('open');
-  document.getElementById('sidebar-overlay').classList.toggle('open');
+  const s = document.querySelector('.sidebar');
+  const o = document.getElementById('sidebar-overlay');
+  s.classList.toggle('open');
+  o.classList.toggle('active');
 }
 
 function closeSidebar() {
-  document.querySelector('.sidebar').classList.remove('open');
-  document.getElementById('sidebar-overlay').classList.remove('open');
+  document.querySelector('.sidebar')?.classList.remove('open');
+  document.getElementById('sidebar-overlay')?.classList.remove('active');
 }
 
 function showPage(id, navEl) {
@@ -635,10 +636,10 @@ async function enregistrerAppel() {
   const classeId = document.getElementById('appel-classe').value;
   const periode = document.getElementById('appel-periode').value;
   const dateAppel = document.getElementById('appel-date').value;
-  if (!classeId) return alert('Sélectionnez une classe.');
+  if (!classeId) { toastWarn('Sélectionnez une classe.'); return; }
 
   const absents = Object.entries(appelData).filter(([,v]) => v === 'absent' || v === 'retard');
-  if (absents.length === 0) { alert('✅ Tout le monde est présent ! Aucune absence à enregistrer.'); return; }
+  if (absents.length === 0) { toastInfo('Tous présents — aucune absence à enregistrer.'); return; }
 
   const insertions = absents.map(([eleveId, statut]) => ({
     ecole_id: ecoleId, eleve_id: eleveId, classe_id: classeId,
@@ -647,7 +648,7 @@ async function enregistrerAppel() {
   }));
 
   await db.from('absences').insert(insertions);
-  alert(`✅ Appel enregistré ! ${absents.length} absence(s) signalée(s).\n📱 Les parents seront notifiés.`);
+  toastOk('Appel enregistré — ' + absents.length + ' absence(s) signalée(s). Les parents seront notifiés.');
 }
 
 // ============================================
@@ -686,7 +687,7 @@ async function enregistrerNotes() {
   const typeEval = document.getElementById('notes-type').value;
   const periode = document.getElementById('notes-periode').value;
 
-  if (!classeId || !matiereId) return alert('Sélectionnez une classe et une matière.');
+  if (!classeId || !matiereId) { toastWarn('Sélectionnez une classe et une matière.'); return; }
 
   const insertions = Object.entries(notesData)
     .filter(([,v]) => v.note !== '' && v.note !== null)
@@ -702,10 +703,10 @@ async function enregistrerNotes() {
       appreciation: v.appreciation || null
     }));
 
-  if (insertions.length === 0) return alert('Aucune note à enregistrer.');
+  if (insertions.length === 0) { toastWarn('Aucune note à enregistrer.'); return; }
   const { error } = await db.from('notes').insert(insertions);
-  if (error) return alert('Erreur : ' + error.message);
-  alert(`✅ ${insertions.length} note(s) enregistrée(s) avec succès !`);
+  if (error) { toastErr('Erreur : ' + error.message); return; }
+  toastOk(insertions.length + ' note(s) enregistrée(s) avec succès !');
 }
 
 // ============================================
@@ -743,7 +744,7 @@ function setEtoiles(eleveId, note) {
 async function enregistrerComportement() {
   const classeId = document.getElementById('comp-classe').value;
   const periode = document.getElementById('comp-periode').value;
-  if (!classeId) return alert('Sélectionnez une classe.');
+  if (!classeId) { toastWarn('Sélectionnez une classe.'); return; }
 
   const insertions = Object.entries(compData).map(([eleveId, v]) => ({
     ecole_id: ecoleId, eleve_id: eleveId,
@@ -754,7 +755,7 @@ async function enregistrerComportement() {
   }));
 
   await db.from('comportements').insert(insertions);
-  alert('✅ Évaluations de comportement enregistrées !');
+  toastOk('Évaluations de comportement enregistrées !');
 }
 async function chargerEmploiDuTempsProf() {
   var loadEl = document.getElementById('load-edt-prof');
@@ -868,7 +869,7 @@ async function publierDevoir() {
   var date = document.getElementById('dev-date').value;
   var titre = document.getElementById('dev-titre') ? document.getElementById('dev-titre').value.trim() : desc.substring(0,40);
 
-  if (!classeId || !desc) return alert('Sélectionnez une classe et décrivez le devoir.');
+  if (!classeId || !desc) { toastWarn('Sélectionnez une classe et décrivez le devoir.'); return; }
 
   var res = await db.from('devoirs').insert([{
     ecole_id: ecoleId,
@@ -880,8 +881,8 @@ async function publierDevoir() {
     date_rendu: date || null
   }]);
 
-  if (res.error) { alert('Erreur : ' + res.error.message); return; }
-  alert('✅ Devoir publié !');
+  if (res.error) { toastErr('Erreur : ' + res.error.message); return; }
+  toastOk('Devoir publié avec succès !');
   document.getElementById('dev-desc').value = '';
   document.getElementById('dev-date').value = '';
   await chargerListeDevoirs();
@@ -916,12 +917,12 @@ async function declarerHeures() {
   const classeId = document.getElementById('h-classe').value;
   const date = document.getElementById('h-date').value;
   const heures = parseFloat(document.getElementById('h-heures').value);
-  if (!classeId || !date || !heures) return alert('Remplissez tous les champs.');
+  if (!classeId || !date || !heures) { toastWarn('Remplissez tous les champs.'); return; }
   await db.from('heures_profs').insert([{
     ecole_id: ecoleId, professeur_id: profId || null,
     classe_id: classeId, date_cours: date, heures
   }]);
-  alert(`✅ ${heures}h déclarées avec succès !`);
+  toastOk(heures + 'h déclarées avec succès !');
   await chargerMesHeures();
 }
 
@@ -976,7 +977,9 @@ async function chargerAnnonces() {
 // ============================================
 async function voirElevesClasse(classeId, nom) {
   const { data } = await db.from('eleves').select('*').eq('classe_id', classeId).order('nom');
-  alert(`${nom} — ${(data||[]).length} élèves :\n\n${(data||[]).map(e=>`• ${e.prenom} ${e.nom}`).join('\n')}`);
+  const eleves = data || [];
+  const liste = eleves.map(e => `• ${e.prenom} ${e.nom}`).join('<br>');
+  toastInfo('<strong>' + nom + ' — ' + eleves.length + ' élève(s)</strong>' + (liste ? '<br><div style="margin-top:6px;font-size:12px;line-height:1.8">' + liste + '</div>' : ''), 0);
 }
 
 async function logout() {

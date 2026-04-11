@@ -7,6 +7,108 @@ const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ============================================
+// SYSTÈME DE TOAST GLOBAL
+// ============================================
+(function initToastSystem() {
+  const style = document.createElement('style');
+  style.textContent = `
+    #toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+      max-width: 340px;
+    }
+    .toast {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 500;
+      font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      pointer-events: all;
+      animation: toastIn 0.25s cubic-bezier(0.34,1.56,0.64,1) forwards;
+      max-width: 340px;
+      line-height: 1.4;
+    }
+    .toast.out {
+      animation: toastOut 0.2s ease forwards;
+    }
+    .toast-ok   { background:#fff; border-left: 3px solid #1A8B5A; color: #0d5c3b; }
+    .toast-err  { background:#fff; border-left: 3px solid #C0392B; color: #7a1f1f; }
+    .toast-info { background:#fff; border-left: 3px solid #1B5FA6; color: #0c3d73; }
+    .toast-warn { background:#fff; border-left: 3px solid #D4700A; color: #7a3e06; }
+    .toast-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+    .toast-close { margin-left: auto; cursor: pointer; opacity: 0.5; font-size: 14px; padding: 0 2px; background:none; border:none; flex-shrink:0; }
+    .toast-close:hover { opacity: 1; }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateX(24px) scale(0.96); }
+      to   { opacity: 1; transform: translateX(0)    scale(1); }
+    }
+    @keyframes toastOut {
+      from { opacity: 1; transform: translateX(0) scale(1); max-height: 80px; margin-bottom: 0; }
+      to   { opacity: 0; transform: translateX(20px) scale(0.95); max-height: 0; padding: 0; margin: 0; }
+    }
+    @media (max-width: 480px) {
+      #toast-container { top: 12px; right: 12px; left: 12px; max-width: none; }
+    }
+  `;
+  document.head.appendChild(style);
+
+  const container = document.createElement('div');
+  container.id = 'toast-container';
+  document.addEventListener('DOMContentLoaded', () => {
+    document.body.appendChild(container);
+  });
+  // Fallback si DOMContentLoaded déjà passé
+  if (document.body) document.body.appendChild(container);
+})();
+
+/**
+ * Affiche un toast de notification.
+ * @param {string} msg   - Message à afficher
+ * @param {'ok'|'err'|'info'|'warn'} type - Type de notification
+ * @param {number} duration - Durée en ms (0 = permanent)
+ */
+function toast(msg, type = 'info', duration = 4000) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  const icons = { ok: '✅', err: '❌', info: 'ℹ️', warn: '⚠️' };
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  t.innerHTML = `
+    <span class="toast-icon">${icons[type] || 'ℹ️'}</span>
+    <span style="flex:1">${msg}</span>
+    <button class="toast-close" onclick="this.parentElement.remove()">✕</button>
+  `;
+
+  container.appendChild(t);
+
+  if (duration > 0) {
+    setTimeout(() => {
+      t.classList.add('out');
+      setTimeout(() => t.remove(), 220);
+    }, duration);
+  }
+
+  return t;
+}
+
+// Alias pratiques
+const toastOk   = (msg, d) => toast(msg, 'ok', d);
+const toastErr  = (msg, d) => toast(msg, 'err', d);
+const toastInfo = (msg, d) => toast(msg, 'info', d);
+const toastWarn = (msg, d) => toast(msg, 'warn', d);
+
+// ============================================
 // UTILITAIRES GLOBAUX
 // ============================================
 
@@ -34,8 +136,8 @@ function genererCode(nom) {
 }
 
 function genererEmail(matricule, code) {
-  const mat = matricule.replace(/-/g, '').toLowerCase();
-  const c = (code || '').replace(/-/g, '').toLowerCase();
+  const mat = matricule.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+  const c = (code || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
   return mat + '@' + c + '.gn';
 }
 
@@ -54,14 +156,9 @@ function genererMatriculeEleve(code, annee, seq) {
 }
 
 function genererMatriculePersonne(nom, sexe, dateNaissance, seq) {
-  // 2 premières lettres du nom
   var nomClean = (nom || 'XX').replace(/[^a-zA-Z]/g, '').toUpperCase();
   var prefix = (nomClean + 'XX').substring(0, 2);
-  
-  // Genre : 1=féminin, 2=masculin
   var genre = (sexe === 'F' || sexe === 'f') ? '1' : '2';
-  
-  // Coder la date de naissance
   var code = 'XXXX';
   if (dateNaissance) {
     var d = new Date(dateNaissance);
@@ -75,10 +172,7 @@ function genererMatriculePersonne(nom, sexe, dateNaissance, seq) {
     var c4 = charset[((jour + mois) * 5) % 34];
     code = '' + c1 + c2 + c3 + c4;
   }
-  
-  // Séquence 4 chiffres
   var sequence = String(seq || 1).padStart(4, '0');
-  
   return prefix + genre + code + sequence;
 }
 
@@ -93,7 +187,7 @@ function genererMatriculeParent(nom, sexe, dateNaissance, seq) {
 async function validerPaiement(paiementId, adminId, ecoleId, plan) {
   const limites = {
     standard: { max_admins: 2, max_eleves: 500 },
-    premium: { max_admins: 4, max_eleves: 999999 }
+    premium:  { max_admins: 4, max_eleves: 999999 }
   };
   await db.from('paiements').update({
     statut: 'valide', valide_par: adminId, valide_le: new Date().toISOString()
@@ -105,7 +199,6 @@ async function validerPaiement(paiementId, adminId, ecoleId, plan) {
   }).eq('id', ecoleId);
 }
 
-// Créer compte Auth depuis Admin
 async function creerCompteAuth(emailInterne, mdpTemp) {
   try {
     const res = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
@@ -120,35 +213,62 @@ async function creerCompteAuth(emailInterne, mdpTemp) {
   }
 }
 
-// Gestion sidebar mobile
+// ============================================
+// GESTION SIDEBAR MOBILE (standard)
+// ============================================
 function initSidebarMobile() {
   const hamburger = document.getElementById('hamburger');
-  const sidebar = document.querySelector('.sidebar');
-  const overlay = document.getElementById('sidebar-overlay');
+  const sidebar   = document.querySelector('.sidebar');
+  const overlay   = document.getElementById('sidebar-overlay');
 
-  if (hamburger && sidebar) {
-    hamburger.addEventListener('click', () => {
-      sidebar.classList.toggle('open');
-      if (overlay) overlay.classList.toggle('active');
-    });
+  function openSidebar() {
+    sidebar?.classList.add('open');
+    overlay?.classList.add('active');
+  }
+  function closeSidebar() {
+    sidebar?.classList.remove('open');
+    overlay?.classList.remove('active');
   }
 
-  if (overlay) {
-    overlay.addEventListener('click', () => {
-      sidebar?.classList.remove('open');
-      overlay.classList.remove('active');
-    });
-  }
+  if (hamburger) hamburger.addEventListener('click', () => {
+    sidebar?.classList.contains('open') ? closeSidebar() : openSidebar();
+  });
 
-  // Fermer sidebar sur clic nav (mobile)
+  if (overlay) overlay.addEventListener('click', closeSidebar);
+
   document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', () => {
-      if (window.innerWidth <= 768) {
-        sidebar?.classList.remove('open');
-        overlay?.classList.remove('active');
-      }
+      if (window.innerWidth <= 768) closeSidebar();
     });
   });
+
+  // Exposer globalement pour les onclick inline existants
+  window.toggleSidebar = () => sidebar?.classList.contains('open') ? closeSidebar() : openSidebar();
+  window.closeSidebar  = closeSidebar;
+}
+
+// ============================================
+// CONFIRMATION AVANT SUPPRESSION
+// ============================================
+function confirmer(msg) {
+  return window.confirm(msg);
+}
+
+// ============================================
+// FORMAT DATE FR
+// ============================================
+function dateFR(dateStr) {
+  if (!dateStr) return '—';
+  return new Date(dateStr).toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
+}
+
+// ============================================
+// NOTE COLOR
+// ============================================
+function noteColor(val) {
+  const n = Number(val);
+  if (isNaN(n)) return '';
+  return n >= 14 ? 'note-high' : n >= 10 ? 'note-mid' : 'note-low';
 }
 
 console.log('✅ EduManager Supabase connecté');

@@ -6,6 +6,7 @@
   <title>EduManager — Super Admin</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="stylesheet" href="shared-styles.css"/>
+  <script src="toast.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f0eb; color: #1a1a1a; }
@@ -95,10 +96,10 @@
     .paiement-row { display: flex; align-items: center; gap: 12px; padding: 14px; background: #f9f9f9; border-radius: 10px; margin-bottom: 8px; }
     .hamburger { display:none; background:none; border:none; cursor:pointer; font-size:24px; padding:4px 8px; color:#1a1a1a; }
 @media (max-width: 768px) {
-  .sidebar { position:fixed; left:-240px; top:0; height:100%; z-index:200; transition:left 0.3s; box-shadow:2px 0 16px rgba(0,0,0,0.15); }
-  .sidebar.open { left:0; }
+  .sidebar { position:fixed; transform:translateX(-100%); top:0; height:100%; z-index:200; transition:transform 0.3s; box-shadow:2px 0 16px rgba(0,0,0,0.15); }
+  .sidebar.open { transform:translateX(0); }
   .sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:199; }
-  .sidebar-overlay.open { display:block; }
+  .sidebar-overlay.active { display:block; }
   .hamburger { display:inline-block !important; }
   .main { margin-left:0 !important; }
   .stats-grid { grid-template-columns:1fr 1fr; }
@@ -340,7 +341,7 @@
             <div class="field"><label>Nom complet</label><input type="text" id="param-nom" value="Ibrahima Cissé"/></div>
             <div class="field"><label>Email</label><input type="email" value="ibra-cisse@outlook.fr" readonly style="background:#f9f9f9;color:#888"/></div>
             <div class="field"><label>Téléphone</label><input type="tel" id="param-tel" placeholder="+224 620 000 000"/></div>
-            <button class="btn btn-primary" onclick="alert('Profil mis à jour !')">Enregistrer</button>
+            <button class="btn btn-primary" onclick="toastOk('Profil mis à jour !')">Enregistrer</button>
           </div>
           <div class="card">
             <div class="card-title">Sécurité</div>
@@ -617,10 +618,10 @@ async function validerPaie(paiementId, ecoleId, plan) {
   if (!confirm(`Valider ce paiement et activer le plan ${plan} ?`)) return;
   try {
     await validerPaiement(paiementId, currentUser?.id, ecoleId, plan);
-    alert('✅ Paiement validé ! L\'abonnement de l\'école est activé.');
+    toastOk('Paiement validé ! L\'abonnement de l\'école est activé.');
     await chargerPaiements();
     await chargerDashboard();
-  } catch(e) { alert('Erreur : ' + e.message); }
+  } catch(e) { toastErr('Erreur : ' + e.message); }
 }
 
 async function refuserPaie(paiementId) {
@@ -858,11 +859,11 @@ function openModal(type, data) {
 
 function toggleSidebar() {
   document.querySelector('.sidebar').classList.toggle('open');
-  document.getElementById('sidebar-overlay').classList.toggle('open');
+  document.getElementById('sidebar-overlay').classList.toggle('active');
 }
 function closeSidebar() {
   document.querySelector('.sidebar').classList.remove('open');
-  document.getElementById('sidebar-overlay').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('active');
 }
 
 function closeModal() {
@@ -939,15 +940,16 @@ async function creerNouvelleEcole() {
     }
 
     closeModal();
-    alert('✅ École "' + nom + '" créée avec succès !\n\n' +
-      '📋 CODE D\'ACCÈS ÉCOLE :\n' + code + '\n\n' +
-      '👤 COMPTE DIRECTEUR :\n' +
-      '─────────────────────────\n' +
-      'Email : ' + dirEmail + '\n' +
-      'Mot de passe : ' + mdpDir + '\n' +
-      '─────────────────────────\n' +
-      '⚠️ Communiquez ces informations au directeur.\n' +
-      'Il devra changer son mot de passe à la première connexion.');
+    window.toast(
+      '<strong>École "' + nom + '" créée avec succès !</strong><br>' +
+      '<div style="margin-top:8px;padding:8px 10px;background:#f9f9f9;border-radius:6px;font-family:monospace;font-size:12px;line-height:1.8">' +
+      '📋 Code école : <strong>' + code + '</strong><br>' +
+      '📧 Email directeur : <strong>' + dirEmail + '</strong><br>' +
+      '🔑 Mot de passe : <strong>' + mdpDir + '</strong>' +
+      '</div>' +
+      '<div style="font-size:11px;color:#888;margin-top:6px">Communiquez ces identifiants au directeur. Il devra changer son mot de passe à la première connexion.</div>',
+      'ok', 0
+    );
     await chargerDashboard();
     await chargerEcoles();
   } catch(e) {
@@ -962,7 +964,7 @@ async function changerPlan(ecoleId, plan) {
   const limites = { gratuit:{max_admins:1,max_eleves:100}, standard:{max_admins:2,max_eleves:500}, premium:{max_admins:4,max_eleves:999999} };
   await db.from('ecoles').update({ plan, ...limites[plan], abonnement_actif: true }).eq('id', ecoleId);
   closeModal();
-  alert('Plan mis à jour !');
+  toastOk('Plan mis à jour !');
   await chargerEcoles();
   await chargerDashboard();
 }
@@ -972,7 +974,7 @@ function modifierPrix(plan) {
   const nouveau = prompt(`Nouveau prix pour le plan ${plan} (en GNF) :`, actuel);
   if (nouveau) {
     document.getElementById(`prix-${plan}`).innerHTML = `${Number(nouveau).toLocaleString('fr-FR')} <span style="font-size:14px;font-weight:400;color:#888">GNF</span>`;
-    alert('Prix mis à jour localement. Pour le sauvegarder en base, ajoutez une table "config_prix" dans Supabase.');
+    toastInfo('Prix mis à jour localement. Pour le sauvegarder en base, ajoutez une table "config_prix" dans Supabase.');
   }
 }
 
@@ -989,12 +991,12 @@ function genererCode(nom) {
 async function changerMdp() {
   const mdp = document.getElementById('new-mdp').value;
   const conf = document.getElementById('conf-mdp').value;
-  if (mdp !== conf) { alert('Les mots de passe ne correspondent pas.'); return; }
+  if (mdp !== conf) { toastWarn('Les mots de passe ne correspondent pas.'); return; }
   const erreurs = validerMotDePasse(mdp);
-  if (erreurs.length > 0) { alert('Mot de passe trop faible : ' + erreurs[0]); return; }
+  if (erreurs.length > 0) { toastWarn('Mot de passe trop faible : ' + erreurs[0]); return; }
   const { error } = await db.auth.updateUser({ password: mdp });
-  if (error) { alert('Erreur : ' + error.message); return; }
-  alert('✅ Mot de passe modifié avec succès !');
+  if (error) { toastErr('Erreur : ' + error.message); return; }
+  toastOk('Mot de passe modifié avec succès !');
 }
 
 async function logout() {

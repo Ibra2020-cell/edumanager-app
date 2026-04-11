@@ -6,6 +6,7 @@
   <title>EduManager — Admin École</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="stylesheet" href="shared-styles.css"/>
+  <script src="toast.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
 
@@ -112,50 +113,19 @@
 
     /* MOBILE (max 768px) */
     @media (max-width: 768px) {
-      .sidebar { position:fixed; left:-230px; top:0; height:100%; z-index:200; transition:left 0.3s; box-shadow:2px 0 16px rgba(0,0,0,0.15); }
-      .sidebar.open { left:0; }
-      .sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:199; }
-      .sidebar-overlay.open { display:block; }
-      .hamburger { display:inline-block !important; }
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.open { transform: translateX(0); box-shadow: 4px 0 24px rgba(0,0,0,0.25); }
+      .sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:199; }
+      .sidebar-overlay.active { display:block; }
+      .hamburger { display:flex !important; align-items:center; justify-content:center; }
       .main { margin-left:0 !important; }
-      .topbar { display:flex; align-items:center; padding: 0 12px; height:50px; }
-      .topbar-title { font-size: 14px; }
-      .topbar-sub { font-size: 10px; }
-      .topbar-actions { display:none; }
-      .content { padding: 12px; }
-      .stats-grid { grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
-      .stat-card { padding: 12px; }
-      .stat-value { font-size: 20px; }
-      .stat-label { font-size: 11px; }
-      .grid2 { grid-template-columns: 1fr; gap: 10px; }
-      .grid3 { grid-template-columns: 1fr; gap: 10px; }
-      .card { padding: 12px; }
-      .card-title { font-size: 13px; }
-      .btn { padding: 6px 10px; font-size: 12px; }
-      .btn-primary { padding: 7px 12px; font-size: 12px; }
-      .btn-sm { padding: 3px 7px; font-size: 10px; }
-      table { font-size: 11px; }
-      th { font-size: 9px; padding: 6px 0; }
-      td { padding: 7px 0; }
-      .modal { padding: 16px; width: 95vw; }
-      .modal-title { font-size: 14px; }
-      .field input, .field select { padding: 8px 10px; font-size: 12px; }
-      .field label { font-size: 11px; }
-      .field-grid { grid-template-columns: 1fr; }
-      .ava { width: 26px; height: 26px; font-size: 9px; }
-      .badge { font-size: 9px; padding: 2px 6px; }
-      .nav-item { padding: 10px 14px; font-size: 13px; }
+      .topbar { padding: 0 14px; }
+      .topbar-actions .btn span { display:none; }
     }
 
     /* PETIT MOBILE (max 480px) */
     @media (max-width: 480px) {
-      .stats-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
-      .stat-card { padding: 10px; }
-      .stat-value { font-size: 18px; }
-      .content { padding: 8px; }
-      .card { padding: 10px; margin-bottom: 10px; }
       table { display: block; overflow-x: auto; white-space: nowrap; }
-      .topbar { height: 46px; }
     }
     .empty { text-align: center; padding: 32px; color: #aaa; }
     .empty-icon { font-size: 36px; margin-bottom: 10px; }
@@ -557,16 +527,7 @@ async function getProchainMatriculeEleve() {
   const { count } = await db.from('eleves').select('id',{count:'exact'}).eq('ecole_id', ecoleId);
   return genererMatriculeEleve(codeEcole, new Date().getFullYear(), (count||0)+1);
 }
-async function getProchainMatriculeProf() {
-  if (!ecoleId) return genererMatriculeProfesseur('ECO', new Date().getFullYear(), 1);
-  const { count } = await db.from('utilisateurs').select('id',{count:'exact'}).eq('ecole_id', ecoleId).eq('role','professeur');
-  return genererMatriculeProfesseur(codeEcole, new Date().getFullYear(), (count||0)+1);
-}
-async function getProchainMatriculeParent() {
-  if (!ecoleId) return genererMatriculeParent('ECO', new Date().getFullYear(), 1);
-  const { count } = await db.from('utilisateurs').select('id',{count:'exact'}).eq('ecole_id', ecoleId).eq('role','parent');
-  return genererMatriculeParent(codeEcole, new Date().getFullYear(), (count||0)+1);
-}
+
 // ============================================
 // INIT SUPABASE
 // ============================================
@@ -621,13 +582,15 @@ const pageMeta = {
   paiement:       ['Abonnement', 'Gérer votre plan', '', ''],
 };
 function toggleSidebar() {
-  document.querySelector('.sidebar').classList.toggle('open');
-  document.getElementById('sidebar-overlay').classList.toggle('open');
+  const s = document.querySelector('.sidebar');
+  const o = document.getElementById('sidebar-overlay');
+  s.classList.toggle('open');
+  o.classList.toggle('active');
 }
 
 function closeSidebar() {
-  document.querySelector('.sidebar').classList.remove('open');
-  document.getElementById('sidebar-overlay').classList.remove('open');
+  document.querySelector('.sidebar')?.classList.remove('open');
+  document.getElementById('sidebar-overlay')?.classList.remove('active');
 }
 async function showPage(id, navEl) {
   closeSidebar();
@@ -943,79 +906,7 @@ async function sauvegarderModifEleve(id) {
   }).eq('id', id);
   if (res.error) { showModalErr(res.error.message); return; }
   fermerModal();
-  alert('✅ Élève modifié avec succès !');
-  chargerEleves();
-}
-async function modifierEleve(id) {
-  var eleve = tousEleves.find(function(e) { return e.id === id; });
-  if (!eleve) return;
-  if (toutesClasses.length === 0 && ecoleId) {
-    var rc = await db.from('classes').select('id,nom').eq('ecole_id', ecoleId).order('nom');
-    toutesClasses = rc.data || [];
-  }
-  // Charger les parents rattachés à cet élève
-  var resParents = await db.from('parents_eleves').select('*, utilisateurs(id,nom,prenom,telephone,numero_matricule)').eq('eleve_id', id);
-  var parents = (resParents.data||[]).map(function(l) { return l.utilisateurs; }).filter(Boolean);
-  var parentsHtml = parents.length === 0
-    ? '<div style="color:#aaa;font-size:12px">Aucun parent rattaché</div>'
-    : parents.map(function(p) {
-        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:#f9f9f9;border-radius:4px;margin-bottom:3px">' +
-          '<span style="font-size:12px"><strong>' + (p.prenom||'') + ' ' + p.nom + '</strong> · ' + (p.telephone||'—') + ' · ' + (p.numero_matricule||'—') + '</span>' +
-        '</div>';
-      }).join('');
-
-  var opts = '<option value="">— Aucune classe —</option>';
-  toutesClasses.forEach(function(c) {
-    opts += '<option value="' + c.id + '"' + (eleve.classe_id === c.id ? ' selected' : '') + '>' + c.nom + '</option>';
-  });
-
-  document.getElementById('modal-content').innerHTML =
-    '<div class="modal-title">✏️ Modifier un élève</div>' +
-    '<div class="alert alert-err" id="m-err"></div>' +
-    '<div style="background:#f9f9f9;border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:12px;color:#888">Matricule : <strong>' + (eleve.numero_matricule||'—') + '</strong></div>' +
-    '<div class="field-grid">' +
-      '<div class="field"><label>Prénom ✱</label><input id="m-prenom" type="text" value="' + (eleve.prenom||'') + '"/></div>' +
-      '<div class="field"><label>Nom ✱</label><input id="m-nom" type="text" value="' + (eleve.nom||'') + '"/></div>' +
-    '</div>' +
-    '<div class="field-grid">' +
-      '<div class="field"><label>Date de naissance</label><input id="m-ddn" type="date" value="' + (eleve.date_naissance||'') + '"/></div>' +
-      '<div class="field"><label>Sexe</label><select id="m-sexe"><option value="M"' + (eleve.sexe==='M'?' selected':'') + '>Masculin</option><option value="F"' + (eleve.sexe==='F'?' selected':'') + '>Féminin</option></select></div>' +
-    '</div>' +
-    '<div class="field"><label>Téléphone élève</label><input id="m-tel" type="tel" value="' + (eleve.telephone||'') + '" placeholder="+224 620 000 000"/></div>' +
-    '<div class="field"><label>Classe</label><select id="m-classe" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff">' + opts + '</select></div>' +
-    '<div class="field"><label>Statut</label><select id="m-statut"><option value="actif"' + (eleve.statut==='actif'?' selected':'') + '>Actif</option><option value="inactif"' + (eleve.statut==='inactif'?' selected':'') + '>Inactif</option><option value="exclu"' + (eleve.statut==='exclu'?' selected':'') + '>Exclu</option></select></div>' +
-    '<div style="margin-bottom:12px">' +
-      '<div style="font-size:12px;color:#888;font-weight:500;margin-bottom:6px">Parents rattachés :</div>' +
-      '<div>' + parentsHtml + '</div>' +
-    '</div>' +
-    '<div class="modal-actions">' +
-      '<button class="btn" onclick="fermerModal()">Annuler</button>' +
-      '<button class="btn btn-primary" onclick="sauvegarderModifEleve(\'' + id + '\')">Enregistrer</button>' +
-    '</div>';
-  document.getElementById('modal-bg').classList.add('open');
-}
-
-async function sauvegarderModifEleve(id) {
-  var prenom = document.getElementById('m-prenom').value.trim();
-  var nom = document.getElementById('m-nom').value.trim();
-  var classeId = document.getElementById('m-classe').value;
-  var ddn = document.getElementById('m-ddn').value;
-  var sexe = document.getElementById('m-sexe').value;
-  var tel = document.getElementById('m-tel').value.trim();
-  var statut = document.getElementById('m-statut').value;
-  if (!prenom||!nom) { showModalErr('Prénom et nom obligatoires.'); return; }
-  var res = await db.from('eleves').update({
-    prenom: prenom,
-    nom: nom,
-    classe_id: classeId || null,
-    date_naissance: ddn || null,
-    sexe: sexe,
-    telephone: tel || null,
-    statut: statut
-  }).eq('id', id);
-  if (res.error) { showModalErr(res.error.message); return; }
-  fermerModal();
-  alert('✅ Élève modifié avec succès !');
+  toastOk('Élève modifié avec succès !');
   chargerEleves();
 }
 async function sauvegarderParent() {
@@ -1075,7 +966,7 @@ async function sauvegarderParent() {
   }
 
   fermerModal();
-  alert('✅ ' + prenom + ' ' + nom + ' ajouté(e) !\n\n📋 IDENTIFIANTS DE CONNEXION :\n─────────────────────────\nMatricule : ' + mat + '\nMot de passe : ' + mdpTemp + '\n─────────────────────────\n⚠️ Donnez ces identifiants au parent.\nIl devra changer son mot de passe à la première connexion.');
+  afficherIdentifiants(prenom + ' ' + nom, mat, mdpTemp, 'parent');
   chargerParents();
 }
 async function supprimerEleve(id, nom) {
@@ -1103,7 +994,8 @@ async function supprimerEleve(id, nom) {
 async function confirmerSupprimerEleve(id) {
   fermerModal();
   const { error } = await db.rpc('supprimer_eleve_complet', { eleve_uuid: id });
-  if (error) { alert('Erreur : ' + error.message); return; }
+  if (error) { toastErr('Erreur : ' + error.message); return; }
+  toastOk('Élève supprimé.');
   await chargerEleves();
 }
 
@@ -1225,23 +1117,27 @@ async function validerPreinsc(id, nom) {
   if (!confirm('Valider la pré-inscription de ' + nom + ' ?')) return;
   await db.from('preinscriptions').update({ statut: 'accepte' }).eq('id', id);
   await chargerPreinscriptions();
-  alert('✅ Pré-inscription de ' + nom + ' validée ! Pensez à créer son compte élève si ce n\'est pas encore fait.');
+  toastOk('Pré-inscription de ' + nom + ' validée ! Pensez à créer son compte élève.');
 }
 
 async function refuserPreinsc(id, nom) {
   if (!confirm('Refuser la pré-inscription de ' + nom + ' ?')) return;
-  await db.from('preinscriptions').update({ statut: 'refuse' }).eq('id', id);
+  const { error } = await db.from('preinscriptions').update({ statut: 'refuse' }).eq('id', id);
+  if (error) { toastErr('Erreur : ' + error.message); return; }
+  toastWarn('Pré-inscription de ' + nom + ' refusée.');
   await chargerPreinscriptions();
 }
 async function archiverPreinsc(id) {
-  if (!confirm('Archiver cette pré-inscription ? Elle sera masquée de la liste principale.')) return;
+  if (!confirm('Archiver cette pré-inscription ?')) return;
   await db.from('preinscriptions').update({ archive: true }).eq('id', id);
+  toastInfo('Pré-inscription archivée.');
   await chargerPreinscriptions();
 }
 async function supprimerPreinsc(id, nom) {
-  if (!confirm('⚠️ ATTENTION — Suppression définitive\n\nVous êtes sur le point de supprimer définitivement la pré-inscription de ' + nom + '.\n\nCette action est IRRÉVERSIBLE. Les données seront perdues pour toujours.\n\nConfirmez-vous la suppression ?')) return;
+  if (!confirm('Supprimer définitivement la pré-inscription de ' + nom + ' ? Cette action est IRRÉVERSIBLE.')) return;
   var { error } = await db.from('preinscriptions').delete().eq('id', id);
-  if (error) { alert('Erreur : ' + error.message); return; }
+  if (error) { toastErr('Erreur : ' + error.message); return; }
+  toastOk('Pré-inscription supprimée.');
   await chargerPreinscriptions();
 }
 // ============================================
@@ -1389,8 +1285,8 @@ async function ajouterCreneau(classeId, classeNom) {
   var fin = document.getElementById('edt-fin').value;
   var salle = document.getElementById('edt-salle').value.trim();
 
-  if (!coursId || !jour || !debut || !fin) { alert('Remplissez tous les champs obligatoires.'); return; }
-  if (debut >= fin) { alert('L\'heure de fin doit être après l\'heure de début.'); return; }
+  if (!coursId || !jour || !debut || !fin) { toastWarn('Remplissez tous les champs obligatoires.'); return; }
+  if (debut >= fin) { toastWarn('L\'heure de fin doit être après l\'heure de début.'); return; }
 
   var res = await db.from('emploi_du_temps').insert([{
     ecole_id: ecoleId,
@@ -1402,7 +1298,8 @@ async function ajouterCreneau(classeId, classeNom) {
     salle: salle || null
   }]);
 
-  if (res.error) { alert('Erreur : ' + res.error.message); return; }
+  if (res.error) { toastErr('Erreur : ' + res.error.message); return; }
+  toastOk('Créneau ajouté !');
   await voirEmploiTemps(classeId, classeNom);
 }
 
@@ -1569,7 +1466,7 @@ function ajouterCoursTemp() {
   var matiereNom = document.getElementById('m-cours-matiere').options[document.getElementById('m-cours-matiere').selectedIndex].text;
   var heures = parseInt(document.getElementById('m-cours-heures')?.value || 0);
   var coef = parseInt(document.getElementById('m-cours-coef')?.value || 1);
-  if (!classeId || !matiereId) return alert('Sélectionnez une classe et une matière.');
+  if (!classeId || !matiereId) { toastWarn('Sélectionnez une classe et une matière.'); return; }
   var key = classeId + '_' + matiereId;
   if (window._coursTemp.find(function(c) { return c.key === key; })) return;
   var label = matiereNom + ' / ' + classeNom + (heures ? ' · ' + heures + 'h/sem' : '') + ' · Coef.' + coef;
@@ -1645,7 +1542,7 @@ async function sauvegarderProf() {
   }
 
   fermerModal();
-  alert('✅ ' + prenom + ' ' + nom + ' ajouté(e) !\n\n📋 IDENTIFIANTS DE CONNEXION :\n─────────────────────────\nMatricule : ' + mat + '\nMot de passe : ' + mdpTemp + '\n─────────────────────────\n⚠️ Donnez ces identifiants au professeur.\nIl devra changer son mot de passe à la première connexion.');
+  afficherIdentifiants(prenom + ' ' + nom, mat, mdpTemp, 'professeur');
   chargerProfesseurs();
 }
 
@@ -1731,7 +1628,7 @@ async function sauvegarderModifProf(id) {
   }
 
   fermerModal();
-  alert('✅ Professeur modifié avec succès !');
+  toastOk('Professeur modifié avec succès !');
   chargerProfesseurs();
 }
 
@@ -1759,7 +1656,8 @@ async function supprimerProf(id, nom) {
 async function confirmerSupprimerProf(id, nom) {
   fermerModal();
   var { error } = await db.rpc('supprimer_utilisateur_complet', { user_uuid: id });
-  if (error) { alert('Erreur : ' + error.message); return; }
+  if (error) { toastErr('Erreur : ' + error.message); return; }
+  toastOk('Professeur supprimé.');
   chargerProfesseurs();
 }
 
@@ -1885,7 +1783,7 @@ async function sauvegarderModifMatiere(id, assignIds) {
   }
 
   fermerModal();
-  alert('✅ Matière mise à jour !');
+  toastOk('Matière mise à jour !');
   chargerMatieres();
 }
 
@@ -1942,16 +1840,17 @@ async function chargerNotes() {
 async function genererBulletins() {
   const classeId = document.getElementById('notes-classe').value;
   const periode = document.getElementById('notes-periode').value;
-  if (!classeId) return alert('Sélectionnez une classe.');
-  if (!ecoleId) return alert('École non configurée.');
+  if (!classeId) { toastWarn('Sélectionnez une classe.'); return; }
+  if (!ecoleId)  { toastErr('École non configurée.'); return; }
   if (!confirm(`Générer les bulletins PDF pour la période ${periode} ?`)) return;
   const btn = event.target;
   btn.textContent = '⏳ Génération en cours...';
   btn.disabled = true;
   try {
     await genererBulletinsClasse(classeId, ecoleId, periode);
+    toastOk('Bulletins générés !');
   } catch(e) {
-    alert('Erreur : ' + e.message);
+    toastErr('Erreur : ' + e.message);
   }
   btn.textContent = '📄 Générer bulletins';
   btn.disabled = false;
@@ -2010,15 +1909,16 @@ async function sauvegarderAppel() {
   const today = new Date().toISOString().split('T')[0];
   const absents = Object.entries(appelData).filter(([,v]) => v === 'absent').map(([id]) => id);
 
-  if (absents.length === 0) { alert('Aucune absence à enregistrer.'); return; }
+  if (absents.length === 0) { toastInfo('Tous les élèves sont présents — rien à enregistrer.'); return; }
 
   const insertions = absents.map(eleveId => ({
     ecole_id: ecoleId, eleve_id: eleveId, classe_id: classeId,
     date_absence: today, periode, justifiee: false, sms_envoye: false
   }));
 
-  await db.from('absences').insert(insertions);
-  alert(`✅ Appel enregistré ! ${absents.length} absence(s) signalée(s).`);
+  const { error: appErr } = await db.from('absences').insert(insertions);
+  if (appErr) { toastErr('Erreur : ' + appErr.message); return; }
+  toastOk('Appel enregistré — ' + absents.length + ' absence(s) signalée(s).');
   await chargerHistoriqueAbsences();
 }
 
@@ -2263,7 +2163,8 @@ async function supprimerParent(id, nom) {
 async function confirmerSupprimerParent(id) {
   fermerModal();
   var { error } = await db.rpc('supprimer_utilisateur_complet', { user_uuid: id });
-  if (error) { alert('Erreur : ' + error.message); return; }
+  if (error) { toastErr('Erreur : ' + error.message); return; }
+  toastOk('Parent supprimé.');
   chargerParents();
 }
 
@@ -2354,11 +2255,12 @@ async function publierAnnonce() {
   const titre = document.getElementById('ann-titre').value.trim();
   const contenu = document.getElementById('ann-contenu').value.trim();
   const destinataires = document.getElementById('ann-dest').value;
-  if (!titre || !contenu) return alert('Remplissez le titre et le contenu.');
-  await db.from('annonces').insert([{ ecole_id: ecoleId, auteur_id: currentUser?.id || null, titre, contenu, destinataires }]);
+  if (!titre || !contenu) { toastWarn('Remplissez le titre et le contenu.'); return; }
+  const { error: annErr } = await db.from('annonces').insert([{ ecole_id: ecoleId, auteur_id: currentUser?.id || null, titre, contenu, destinataires }]);
+  if (annErr) { toastErr('Erreur : ' + annErr.message); return; }
   document.getElementById('ann-titre').value = '';
   document.getElementById('ann-contenu').value = '';
-  alert('✅ Annonce publiée !');
+  toastOk('Annonce publiée !');
   await chargerAnnonces();
 }
 
@@ -2393,11 +2295,13 @@ async function soumettreAbonnement() {
   const plan = document.getElementById('pay-plan').value;
   const ref = document.getElementById('pay-ref').value.trim();
   const methode = document.getElementById('pay-methode').value;
-  if (!ref) return alert('Entrez la référence de votre transaction.');
+  if (!ref) { toastWarn('Entrez la référence de votre transaction.'); return; }
   const montant = plan === 'standard' ? 500000 : 1500000;
-  await db.from('paiements').insert([{ ecole_id: ecoleId, montant, devise: 'GNF', methode, reference_transaction: ref, plan_demande: plan, statut: 'en_attente' }]);
+  const { error: payErr } = await db.from('paiements').insert([{ ecole_id: ecoleId, montant, devise: 'GNF', methode, reference_transaction: ref, plan_demande: plan, statut: 'en_attente' }]);
+  if (payErr) { toastErr('Erreur : ' + payErr.message); return; }
   const al = document.getElementById('pay-alert');
   al.className = 'alert alert-ok'; al.textContent = '✅ Demande envoyée ! Validation sous 24h.'; al.style.display = 'block';
+  toastOk('Demande d\'abonnement envoyée !');
   document.getElementById('pay-ref').value = '';
 }
 
@@ -2672,12 +2576,6 @@ function fermerModal() { document.getElementById('modal-bg').classList.remove('o
     if (resEcole.data) codeEcole = resEcole.data.code_acces;
   }
 
-  // Récupérer le code école si vide
-  if (!codeEcole && ecoleId) {
-    var resEcole = await db.from('ecoles').select('code_acces').eq('id', ecoleId).single();
-    if (resEcole.data) codeEcole = resEcole.data.code_acces;
-  }
-
   // Générer email interne et mot de passe temporaire
   var emailInterne = genererEmail(mat, codeEcole);
   var mdpTemp = genererMotDePasse(mat);
@@ -2732,7 +2630,7 @@ function fermerModal() { document.getElementById('modal-bg').classList.remove('o
   }
 
   fermerModal();
-  alert('✅ ' + prenom + ' ' + nom + ' ajouté(e) !\n\n📋 IDENTIFIANTS DE CONNEXION :\n─────────────────────────\nMatricule : ' + mat + '\nMot de passe : ' + mdpTemp + '\n─────────────────────────\n⚠️ Donnez ces identifiants à l\'élève.\nIl devra changer son mot de passe à la première connexion.');
+  afficherIdentifiants(prenom + ' ' + nom, mat, mdpTemp, 'eleve');
   chargerEleves();
 }
 
@@ -2744,7 +2642,7 @@ async function sauvegarderClasse() {
   const { error } = await db.from('classes').insert([{ ecole_id: ecoleId, nom, niveau, annee_scolaire: annee }]);
   if (error) { showModalErr(error.message); return; }
   fermerModal();
-  alert(`✅ Classe "${nom}" créée !`);
+  toastOk('Classe "' + nom + '" créée !');
   await chargerClasses();
 }
 
@@ -2765,9 +2663,11 @@ async function sauvegarderEvenement() {
   const debut = document.getElementById('m-ev-debut').value;
   const fin = document.getElementById('m-ev-fin').value;
   const type = document.getElementById('m-ev-type').value;
-  if (!titre || !debut) { alert('Titre et date de début obligatoires.'); return; }
-  await db.from('evenements').insert([{ ecole_id: ecoleId, titre, description: desc, date_debut: debut, date_fin: fin || null, type }]);
+  if (!titre || !debut) { showModalErr('Titre et date de début obligatoires.'); return; }
+  const { error: evErr } = await db.from('evenements').insert([{ ecole_id: ecoleId, titre, description: desc, date_debut: debut, date_fin: fin || null, type }]);
+  if (evErr) { showModalErr(evErr.message); return; }
   fermerModal();
+  toastOk('Événement créé !');
   await chargerEvenements();
 }
 

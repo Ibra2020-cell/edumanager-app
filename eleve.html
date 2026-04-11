@@ -6,6 +6,7 @@
   <title>EduManager — Espace Élève</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="stylesheet" href="shared-styles.css"/>
+  <script src="toast.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f0eb; color: #1a1a1a; }
@@ -73,10 +74,10 @@
     .star.active { opacity: 1; }
     .cours-block { background: #FAEEDA; border-left: 3px solid #EF9F27; border-radius: 0 8px 8px 0; padding: 10px 14px; margin-bottom: 6px; }
   @media (max-width: 768px) {
-  .sidebar { position:fixed;left:-260px;top:0;height:100%;z-index:200;transition:left 0.3s;box-shadow:2px 0 16px rgba(0,0,0,0.15); }
-  .sidebar.open { left:0; }
+  .sidebar { position:fixed;transform:translateX(-100%);top:0;height:100%;z-index:200;transition:transform 0.3s;box-shadow:2px 0 16px rgba(0,0,0,0.15); }
+  .sidebar.open { transform:translateX(0); }
   .sidebar-overlay { display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:199; }
-  .sidebar-overlay.open { display:block; }
+  .sidebar-overlay.active { display:block; }
   #menu-toggle { display:inline-block !important; }
   .main { margin-left:0 !important; }
 }
@@ -297,14 +298,6 @@ const pageMeta = {
   avis:        ['Avis sur mes profs', 'Évaluation anonyme'],
   signalement: ['Signalement anonyme', 'Strictement confidentiel'],
 };
-function toggleSidebar() {
-  document.querySelector('.sidebar').classList.toggle('open');
-  document.getElementById('sidebar-overlay').classList.toggle('open');
-}
-function closeSidebar() {
-  document.querySelector('.sidebar').classList.remove('open');
-  document.getElementById('sidebar-overlay').classList.remove('open');
-}
 function showPage(id, navEl) {
   closeSidebar();
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -440,7 +433,7 @@ async function chargerBulletins() {
   document.getElementById('cont-bulletins').innerHTML = eleveId
     ? `<div style="display:flex;align-items:center;justify-content:space-between;padding:14px;background:#f9f9f9;border-radius:8px;margin-bottom:8px">
         <div><div style="font-size:13px;font-weight:500">Bulletin — Trimestre 2 · 2025-2026</div><div style="font-size:11px;color:#aaa;margin-top:2px">Disponible</div></div>
-        <button style="padding:6px 14px;background:#EF9F27;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer" onclick="alert('📄 Bulletin disponible après génération par l\\'école')">Télécharger</button>
+        <button style="padding:6px 14px;background:#EF9F27;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer" onclick="toastInfo('Bulletin disponible après génération par l\'école.')">Télécharger</button>
       </div>`
     : '<div class="empty"><div class="empty-icon">📄</div>Connectez-vous avec un vrai compte.</div>';
 }
@@ -542,21 +535,21 @@ function setAvis(profId, note) {
 }
 
 async function envoyerAvis() {
-  if (!eleveId) return alert('Connectez-vous avec un vrai compte élève.');
+  if (!eleveId) { toastWarn('Connectez-vous avec un vrai compte élève.'); return; }
   const insertions = Object.entries(avisRatings).map(([profId, note]) => ({
     ecole_id: ecoleId, eleve_id: eleveId, professeur_id: profId,
     note, commentaire: document.getElementById(`avis-comm-${profId}`)?.value || null
   }));
   await db.from('avis_profs').upsert(insertions, { onConflict: 'eleve_id,professeur_id' });
-  alert('✅ Vos avis ont été envoyés anonymement !');
+  toastOk('Vos avis ont été envoyés anonymement !');
 }
 
 async function envoyerSignalement() {
   const contenu = document.getElementById('sig-contenu').value.trim();
-  if (!contenu) return alert('Décrivez la situation.');
-  if (!ecoleId) return alert('École non trouvée.');
+  if (!contenu) { toastWarn('Décrivez la situation.'); return; }
+  if (!ecoleId) { toastErr('École non trouvée.'); return; }
   await db.from('signalements').insert([{ ecole_id: ecoleId, contenu, statut: 'nouveau' }]);
-  alert('✅ Signalement envoyé anonymement. Traité sous 48h.');
+  toastOk('Signalement envoyé anonymement. Traité sous 48h.');
   document.getElementById('sig-contenu').value = '';
 }
 
