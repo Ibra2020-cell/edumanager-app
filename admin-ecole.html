@@ -533,8 +533,24 @@ async function getProchainMatriculeEleve() {
 // ============================================
 const SUPABASE_URL = 'https://rcojerlzguwqpclyudjo.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjb2plcmx6Z3V3cXBjbHl1ZGpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NTg1MzIsImV4cCI6MjA5MTAzNDUzMn0.4R_NOrYLdhkVMKw87Z33FLS9LoAUAgVj_Uk_RBCf8tg';
+// ⚠️ Clé service_role — REMPLACER par la vraie valeur (Supabase → Project Settings → API → service_role)
+const SUPABASE_SERVICE_KEY = 'REMPLACER_PAR_SERVICE_ROLE_KEY';
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Crée un compte Auth confirmé d'emblée (pas de vérification email requise)
+async function creerCompteConfirme(email, mdp) {
+  var res = await fetch(SUPABASE_URL + '/auth/v1/admin/users', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_SERVICE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_SERVICE_KEY
+    },
+    body: JSON.stringify({ email: email, password: mdp, email_confirm: true })
+  });
+  return await res.json();
+}
 
 let currentUser = null;
 let codeEcole = '';
@@ -931,12 +947,8 @@ async function sauvegarderParent() {
   var emailInterne = genererEmail(mat, codeEcole);
   var mdpTemp = genererMotDePasse(mat);
 
-  // Créer compte Auth
-  var authRes = await fetch('https://rcojerlzguwqpclyudjo.supabase.co/auth/v1/signup', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjb2plcmx6Z3V3cXBjbHl1ZGpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NTg1MzIsImV4cCI6MjA5MTAzNDUzMn0.4R_NOrYLdhkVMKw87Z33FLS9LoAUAgVj_Uk_RBCf8tg' },
-    body: JSON.stringify({ email: emailInterne, password: mdpTemp })
-  }).then(function(r) { return r.json(); });
+  // Créer compte Auth (confirmé d'emblée, pas de vérification email)
+  var authRes = await creerCompteConfirme(emailInterne, mdpTemp);
 
   var authId = authRes.user ? authRes.user.id : (authRes.id || null);
   if (!authId) { showModalErr('Erreur création compte : ' + (authRes.msg || authRes.message || authRes.error_description || JSON.stringify(authRes))); return; }
@@ -1507,14 +1519,9 @@ async function sauvegarderProf() {
   var emailInterne = genererEmail(mat, codeEcole);
   var mdpTemp = genererMotDePasse(mat);
 
-  // Créer compte Auth
-  var authRes = await fetch('https://rcojerlzguwqpclyudjo.supabase.co/auth/v1/signup', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjb2plcmx6Z3V3cXBjbHl1ZGpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NTg1MzIsImV4cCI6MjA5MTAzNDUzMn0.4R_NOrYLdhkVMKw87Z33FLS9LoAUAgVj_Uk_RBCf8tg' },
-    body: JSON.stringify({ email: emailInterne, password: mdpTemp })
-  }).then(function(r) { return r.json(); });
-
-  var authId = authRes.user ? authRes.user.id : (authRes.id || null);
+  // Créer compte Auth (confirmé d'emblée, pas de vérification email)
+  var authRes = await creerCompteConfirme(emailInterne, mdpTemp);
+  var authId = authRes.id || (authRes.user && authRes.user.id) || null;
   if (!authId) { showModalErr('Erreur création compte : ' + (authRes.msg || authRes.message || authRes.error_description || JSON.stringify(authRes))); return; }
 
   // Insérer dans utilisateurs
@@ -2580,12 +2587,8 @@ function fermerModal() { document.getElementById('modal-bg').classList.remove('o
   var emailInterne = genererEmail(mat, codeEcole);
   var mdpTemp = genererMotDePasse(mat);
 
-  // Créer le compte Supabase Auth
-  var authRes = await fetch('https://rcojerlzguwqpclyudjo.supabase.co/auth/v1/signup', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjb2plcmx6Z3V3cXBjbHl1ZGpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NTg1MzIsImV4cCI6MjA5MTAzNDUzMn0.4R_NOrYLdhkVMKw87Z33FLS9LoAUAgVj_Uk_RBCf8tg' },
-    body: JSON.stringify({ email: emailInterne, password: mdpTemp })
-  }).then(function(r) { return r.json(); });
+  // Créer le compte Supabase Auth (confirmé d'emblée, pas de vérification email)
+  var authRes = await creerCompteConfirme(emailInterne, mdpTemp);
 
   var authId = authRes.user ? authRes.user.id : (authRes.id || null);
   if (!authId) {

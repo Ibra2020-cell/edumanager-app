@@ -128,7 +128,7 @@
       <div class="user-avatar" id="user-initials">--</div>
       <div>
         <div class="user-name" id="user-name">Chargement...</div>
-        <div class="user-role" id="user-matiere">Professeur</div>
+        <div class="user-role" id="user-role">Professeur</div>
       </div>
       <button class="logout-btn" onclick="logout()">⏻</button>
     </div>
@@ -414,7 +414,8 @@ let compData = {};
     document.getElementById('school-name').textContent = u.ecoles?.nom || '';
     document.getElementById('user-name').textContent = (u.prenom||'') + ' ' + (u.nom||'');
     document.getElementById('user-initials').textContent = ((u.prenom?.[0]||'')+(u.nom?.[0]||'')).toUpperCase();
-    document.getElementById('user-role').textContent = 'Professeur';
+    const userRoleEl = document.getElementById('user-role');
+if (userRoleEl) userRoleEl.textContent = 'Professeur';
 
   } catch(e) {
     console.error('Erreur init:', e.message);
