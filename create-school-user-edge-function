@@ -1,0 +1,64 @@
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
+const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+
+function response(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+    },
+  });
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") return response({ ok: true });
+  if (req.method !== "POST") return response({ error: "Méthode non autorisée." }, 405);
+
+  if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+    return response({ error: "Secrets Supabase manquants." }, 500);
+  }
+
+  try {
+    const body = await req.json();
+    const email = String(body?.email || "").trim().toLowerCase();
+    const password = String(body?.password || "");
+    const user_metadata = body?.user_metadata || {};
+
+    if (!email || !password) {
+      return response({ error: "Email et mot de passe obligatoires." }, 400);
+    }
+
+    const createRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": SERVICE_ROLE_KEY,
+        "Authorization": `Bearer ${SERVICE_ROLE_KEY}`,
+      },
+      body: JSON.stringify({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata,
+      }),
+    });
+
+    const createJson = await createRes.json().catch(() => ({}));
+
+    if (!createRes.ok) {
+      return response({
+        error: createJson?.msg || createJson?.message || createJson?.error_description || createJson?.error || "Erreur de création du compte.",
+        details: createJson,
+      }, createRes.status);
+    }
+
+    return response({ user: createJson.user || createJson });
+  } catch (error) {
+    return response({ error: error instanceof Error ? error.message : "Erreur inconnue." }, 500);
+  }
+});

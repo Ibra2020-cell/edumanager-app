@@ -233,6 +233,17 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+async function chargerProfilUtilisateur(authUserId) {
+  var resId = await db.from('utilisateurs').select('*, ecoles(*)').eq('id', authUserId).maybeSingle();
+  if (resId.error) throw resId.error;
+  if (resId.data) return resId.data;
+
+  var resAuth = await db.from('utilisateurs').select('*, ecoles(*)').eq('auth_id', authUserId).maybeSingle();
+  if (resAuth.error) throw resAuth.error;
+  return resAuth.data || null;
+}
+
+
 let currentUser = null;
 let ecoleId = null;
 let eleveId = null;
@@ -242,8 +253,8 @@ let avisRatings = {};
   try {
     const { data: { session } } = await db.auth.getSession();
     if (!session) { window.location.href = 'index.html'; return; }
-    const { data: u } = await db.from('utilisateurs').select('*, ecoles(*)').eq('id', session.user.id).maybeSingle();
-    if (!u || u.role !== 'eleve') { window.location.href = 'index.html'; return; }
+    const u = await chargerProfilUtilisateur(session.user.id);
+    if (!u || u.role !== 'eleve' || u.actif === false) { window.location.href = 'index.html'; return; }
     // Si premiere connexion encore active → déconnecter proprement
     if (u.premiere_connexion) {
       await db.auth.signOut();

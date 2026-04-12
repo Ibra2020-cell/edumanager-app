@@ -533,46 +533,79 @@ async function getProchainMatriculeEleve() {
 // ============================================
 const SUPABASE_URL = 'https://rcojerlzguwqpclyudjo.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjb2plcmx6Z3V3cXBjbHl1ZGpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NTg1MzIsImV4cCI6MjA5MTAzNDUzMn0.4R_NOrYLdhkVMKw87Z33FLS9LoAUAgVj_Uk_RBCf8tg';
-// ⚠️ Clé service_role — REMPLACER par la vraie valeur (Supabase → Project Settings → API → service_role)
-const SUPABASE_SERVICE_KEY = 'REMPLACER_PAR_SERVICE_ROLE_KEY';
+const CREATE_SCHOOL_USER_FUNCTION_URL = SUPABASE_URL + '/functions/v1/create-school-user';
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Crée un compte Auth sans basculer la session courante de l'admin école
-async function creerCompteConfirme(email, mdp) {
+function extraireMessageErreur(err, fallback) {
+  if (!err) return fallback || 'Une erreur est survenue.';
+  if (typeof err === 'string') return err;
+  return err.error || err.msg || err.message || err.error_description || fallback || 'Une erreur est survenue.';
+}
+
+async function chargerProfilUtilisateur(authUserId) {
+  var resId = await db.from('utilisateurs').select('*, ecoles(*)').eq('id', authUserId).maybeSingle();
+  if (resId.error) throw resId.error;
+  if (resId.data) return resId.data;
+
+  var resAuth = await db.from('utilisateurs').select('*, ecoles(*)').eq('auth_id', authUserId).maybeSingle();
+  if (resAuth.error) throw resAuth.error;
+  return resAuth.data || null;
+}
+
+// Crée un compte Auth confirmé d'emblée si la Edge Function est disponible.
+// Sinon, repli sur signup public.
+async function creerCompteConfirme(email, mdp, role, userMetadata) {
+  var payload = {
+    email: String(email || '').trim().toLowerCase(),
+    password: mdp,
+    user_metadata: Object.assign({
+      role: role || 'membre',
+      source: 'admin_ecole'
+    }, userMetadata || {})
+  };
+
   try {
-    const res = await fetch(SUPABASE_URL + '/auth/v1/signup', {
+    var resFn = await fetch(CREATE_SCHOOL_USER_FUNCTION_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'apikey': SUPABASE_KEY,
         'Authorization': 'Bearer ' + SUPABASE_KEY
       },
-      body: JSON.stringify({
-        email: email,
-        password: mdp
-      })
+      body: JSON.stringify(payload)
     });
 
-    const json = await res.json();
+    var jsonFn = await resFn.json().catch(function() { return {}; });
 
-    if (!res.ok) {
-      return {
-        error:
-          json?.msg ||
-          json?.error_description ||
-          json?.error ||
-          'Erreur inconnue lors de la création du compte'
-      };
+    if (resFn.ok && jsonFn && jsonFn.user && jsonFn.user.id) {
+      return { user: jsonFn.user, mode: 'edge_function' };
+    }
+
+    if (resFn.status && resFn.status !== 404) {
+      return { error: extraireMessageErreur(jsonFn, 'Erreur lors de la création du compte.') };
+    }
+  } catch (e) {
+    console.warn('Fonction create-school-user indisponible, tentative de secours.', e);
+  }
+
+  try {
+    var signup = await db.auth.signUp({
+      email: payload.email,
+      password: mdp
+    });
+
+    if (signup.error) {
+      return { error: extraireMessageErreur(signup.error, 'Erreur lors de la création du compte.') };
     }
 
     return {
-      user: json.user || json
+      user: signup.data ? signup.data.user : null,
+      mode: 'signup_fallback',
+      warning: 'Compte créé en mode secours. Si la première connexion échoue, active la fonction Supabase create-school-user ou désactive la confirmation email.'
     };
   } catch (e) {
-    return {
-      error: e.message || 'Erreur réseau lors de la création du compte'
-    };
+    return { error: extraireMessageErreur(e, 'Erreur réseau lors de la création du compte.') };
   }
 }
 
@@ -591,8 +624,8 @@ let appelData = {};
   try {
     const { data: { session } } = await db.auth.getSession();
     if (!session) { window.location.href = 'index.html'; return; }
-    const { data: u } = await db.from('utilisateurs').select('*, ecoles(*)').eq('id', session.user.id).maybeSingle();
-    if (!u || u.role !== 'admin_ecole') { window.location.href = 'index.html'; return; }
+    const u = await chargerProfilUtilisateur(session.user.id);
+    if (!u || u.role !== 'admin_ecole' || u.actif === false) { window.location.href = 'index.html'; return; }
     currentUser = u;
     ecoleId = u.ecole_id;
     document.getElementById('school-name').textContent = u.ecoles?.nom || 'Mon école';
@@ -972,17 +1005,16 @@ async function sauvegarderParent() {
   var mdpTemp = genererMotDePasse(mat);
 
   // Créer compte Auth
-  var authRes = await creerCompteConfirme(emailInterne, mdpTemp);
-  if (authRes.error) {
-    showModalErr('Erreur création compte : ' + authRes.error);
-    return;
-  }
+  var authRes = await creerCompteConfirme(emailInterne, mdpTemp, 'parent', {
+    ecole_id: ecoleId,
+    ecole_code: codeEcole,
+    numero_matricule: mat
+  });
+
+  if (authRes.error) { showModalErr('Erreur création compte : ' + authRes.error); return; }
 
   var authId = authRes.user ? authRes.user.id : null;
-  if (!authId) {
-    showModalErr('Erreur création compte : identifiant utilisateur introuvable.');
-    return;
-  }
+  if (!authId) { showModalErr('Erreur création compte : identifiant utilisateur introuvable.'); return; }
 
   // Insérer dans utilisateurs
   var res = await db.from('utilisateurs').insert([{
@@ -1008,6 +1040,7 @@ async function sauvegarderParent() {
     }));
   }
 
+  if (authRes.warning) toastWarn(authRes.warning, 9000);
   fermerModal();
   afficherIdentifiants(prenom + ' ' + nom, mat, mdpTemp, 'parent');
   chargerParents();
@@ -1551,16 +1584,14 @@ async function sauvegarderProf() {
   var mdpTemp = genererMotDePasse(mat);
 
   // Créer compte Auth
-  var authRes = await creerCompteConfirme(emailInterne, mdpTemp);
-  if (authRes.error) {
-    showModalErr('Erreur création compte : ' + authRes.error);
-    return;
-  }
+  var authRes = await creerCompteConfirme(emailInterne, mdpTemp, 'professeur', {
+    ecole_id: ecoleId,
+    ecole_code: codeEcole,
+    numero_matricule: mat
+  });
+  if (authRes.error) { showModalErr('Erreur création compte : ' + authRes.error); return; }
   var authId = authRes.user ? authRes.user.id : null;
-  if (!authId) {
-    showModalErr('Erreur création compte : identifiant utilisateur introuvable.');
-    return;
-  }
+  if (!authId) { showModalErr('Erreur création compte : identifiant utilisateur introuvable.'); return; }
 
   // Insérer dans utilisateurs
   var res = await db.from('utilisateurs').insert([{
@@ -1586,6 +1617,7 @@ async function sauvegarderProf() {
     }));
   }
 
+  if (authRes.warning) toastWarn(authRes.warning, 9000);
   fermerModal();
   afficherIdentifiants(prenom + ' ' + nom, mat, mdpTemp, 'professeur');
   chargerProfesseurs();
@@ -2626,7 +2658,12 @@ function fermerModal() { document.getElementById('modal-bg').classList.remove('o
   var mdpTemp = genererMotDePasse(mat);
 
   // Créer le compte Supabase Auth
-  var authRes = await creerCompteConfirme(emailInterne, mdpTemp);
+  var authRes = await creerCompteConfirme(emailInterne, mdpTemp, 'eleve', {
+    ecole_id: ecoleId,
+    ecole_code: codeEcole,
+    numero_matricule: mat
+  });
+
   if (authRes.error) {
     showModalErr('Erreur création compte Auth : ' + authRes.error);
     return;
@@ -2661,8 +2698,7 @@ function fermerModal() { document.getElementById('modal-bg').classList.remove('o
   if (authId) {
     var resUser = await db.from('utilisateurs').insert([{
       id: authId,
-      nom: nom,
-      prenom: prenom,
+      nom: nom, prenom: prenom,
       role: 'eleve',
       ecole_id: ecoleId,
       actif: true,
@@ -2680,6 +2716,7 @@ function fermerModal() { document.getElementById('modal-bg').classList.remove('o
     }
   }
 
+  if (authRes.warning) toastWarn(authRes.warning, 9000);
   fermerModal();
   afficherIdentifiants(prenom + ' ' + nom, mat, mdpTemp, 'eleve');
   chargerEleves();

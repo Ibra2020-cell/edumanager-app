@@ -539,23 +539,7 @@ function checkForceOubli(mdp) {
 }
 
 async function getUserProfileByAuthId(authUserId) {
-  let { data: userById, error: err1 } = await db
-    .from('utilisateurs')
-    .select('id, auth_id, role, nom, prenom, ecole_id, premiere_connexion, actif')
-    .eq('id', authUserId)
-    .maybeSingle();
-
-  if (err1) throw err1;
-  if (userById) return userById;
-
-  let { data: userByAuth, error: err2 } = await db
-    .from('utilisateurs')
-    .select('id, auth_id, role, nom, prenom, ecole_id, premiere_connexion, actif')
-    .eq('auth_id', authUserId)
-    .maybeSingle();
-
-  if (err2) throw err2;
-  return userByAuth || null;
+  return await chargerProfilUtilisateur(authUserId, 'id, auth_id, role, nom, prenom, ecole_id, premiere_connexion, actif');
 }
 
 async function updateLastLogin(authUserId) {
@@ -699,9 +683,10 @@ async function doLoginAdmin() {
 
     window.location.href = ROLES[profile.role] || 'index.html';
   } catch (e) {
-    const msg = e.message === 'Invalid login credentials'
+    const rawMsg = messageConnexion(e, 'Erreur de connexion.');
+    const msg = rawMsg === 'Invalid login credentials'
       ? '❌ Email ou mot de passe incorrect.'
-      : e.message;
+      : rawMsg;
     showErr('err-login', msg);
   } finally {
     btn.disabled = false;
@@ -757,9 +742,10 @@ async function doLogin() {
 
     window.location.href = ROLES[profile.role] || 'index.html';
   } catch (e) {
-    const msg = e.message === 'Invalid login credentials'
+    const rawMsg = messageConnexion(e, 'Erreur de connexion.');
+    const msg = rawMsg === 'Invalid login credentials'
       ? '❌ Matricule, code école ou mot de passe incorrect.'
-      : e.message;
+      : rawMsg;
     showErr('err-login', msg);
   } finally {
     btn.disabled = false;
@@ -866,7 +852,7 @@ async function doPremiereConnexion() {
       ok.style.display = 'none';
     }, 2500);
   } catch (e) {
-    showErr('err-premiere', e.message);
+    showErr('err-premiere', messageConnexion(e, 'Erreur lors de l\'activation du compte.'));
   } finally {
     btn.disabled = false;
     btn.textContent = '🔐 Activer mon compte';
@@ -917,17 +903,7 @@ async function demanderResetMdp() {
         throw new Error(err);
       }
 
-      const email = buildInternalEmail(matricule, code);
-
-      const resReset = await db.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + '/changer-mdp.html'
-      });
-
-      if (resReset.error) {
-        throw new Error('Impossible de réinitialiser. Vérifiez votre matricule et code école.');
-      }
-
-      showOk('ok-oubli', '✅ Lien envoyé ! Vérifiez votre email ou contactez votre directeur.');
+      throw new Error('Pour les comptes Élève / Parent / Professeur, la réinitialisation par email n\'est pas activée dans cette version. Demandez à votre école de vous redonner un mot de passe temporaire.');
     }
   } catch (e) {
     showErr('err-oubli', e.message);

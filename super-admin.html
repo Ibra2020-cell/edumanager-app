@@ -910,33 +910,45 @@ async function creerNouvelleEcole() {
     var ecoleId = resEcole.data.id;
 
     // 2. Créer compte Auth directeur
-    var emailInterne = dirEmail; // Le directeur utilise son vrai email
-    var authRes = await fetch('https://rcojerlzguwqpclyudjo.supabase.co/auth/v1/signup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjb2plcmx6Z3V3cXBjbHl1ZGpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NTg1MzIsImV4cCI6MjA5MTAzNDUzMn0.4R_NOrYLdhkVMKw87Z33FLS9LoAUAgVj_Uk_RBCf8tg' },
-      body: JSON.stringify({ email: emailInterne, password: mdpDir })
-    }).then(function(r) { return r.json(); });
+    var emailInterne = dirEmail.trim().toLowerCase(); // Le directeur utilise son vrai email
+    var authRes = await creerCompteAuth(emailInterne, mdpDir, 'admin_ecole', {
+      ecole_id: ecoleId,
+      ecole_code: code
+    });
 
-    var authId = authRes.user ? authRes.user.id : (authRes.id || null);
+    if (authRes.error) {
+      throw new Error(authRes.error);
+    }
+
+    var authId = authRes.user ? authRes.user.id : null;
+    if (!authId) {
+      throw new Error('Création du compte directeur impossible : identifiant Auth introuvable.');
+    }
 
     // 3. Créer profil directeur dans utilisateurs
-    if (authId) {
-      var nomParts = dirNom.trim().split(' ');
-      var prenom = nomParts[0];
-      var nomFam = nomParts.slice(1).join(' ') || nomParts[0];
-      await db.from('utilisateurs').insert([{
-        id: authId,
-        nom: nomFam, prenom: prenom,
-        role: 'admin_ecole',
-        ecole_id: ecoleId,
-        actif: true,
-        compte_active: true,
-        email: dirEmail,
-        telephone: dirTel ? '+224' + dirTel : null,
-        auth_id: authId,
-        mdp_temp: mdpDir,
-        premiere_connexion: true
-      }]);
+    var nomParts = dirNom.trim().split(' ').filter(Boolean);
+    var prenom = nomParts[0] || dirNom.trim();
+    var nomFam = nomParts.slice(1).join(' ') || nomParts[0] || dirNom.trim();
+    var resUser = await db.from('utilisateurs').insert([{
+      id: authId,
+      nom: nomFam, prenom: prenom,
+      role: 'admin_ecole',
+      ecole_id: ecoleId,
+      actif: true,
+      compte_active: true,
+      email: emailInterne,
+      telephone: dirTel ? '+224' + dirTel : null,
+      auth_id: authId,
+      mdp_temp: mdpDir,
+      premiere_connexion: true
+    }]);
+
+    if (resUser.error) {
+      throw resUser.error;
+    }
+
+    if (authRes.warning) {
+      toastWarn(authRes.warning, 8000);
     }
 
     closeModal();

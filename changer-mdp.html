@@ -113,14 +113,17 @@ async function changerMdp() {
     const {data:session}=await db.auth.getSession();
     if(session?.session?.user) {
       const userId=session.session.user.id;
-      let {data:u}=await db.from('utilisateurs').select('id,role').eq('id',userId).maybeSingle();
-      if(!u){const{data:u2}=await db.from('utilisateurs').select('id,role').eq('auth_id',userId).maybeSingle();u=u2;}
+      let u = await chargerProfilUtilisateur(userId, 'id, auth_id, role');
       if(u){
-        await db.from('utilisateurs').update({premiere_connexion:false,mdp_temp:null}).eq('id',u.id);
+        await db.from('utilisateurs').update({premiere_connexion:false,mdp_temp:null,derniere_connexion:new Date().toISOString()}).eq('id',u.id);
+        await db.from('utilisateurs').update({premiere_connexion:false,mdp_temp:null,derniere_connexion:new Date().toISOString()}).eq('auth_id',userId);
+        await db.from('eleves').update({premiere_connexion:false,mdp_temp:null}).eq('auth_id',userId);
         const ok=document.getElementById('ok-mdp');
         ok.textContent='✅ Mot de passe défini avec succès ! Redirection...';
         ok.style.display='block';
         setTimeout(()=>window.location.href=ROLES[u.role]||'index.html',2000);
+      } else {
+        throw new Error('Profil utilisateur introuvable après la mise à jour du mot de passe.');
       }
     }
   } catch(e){showErr(e.message||'Erreur lors du changement.');}
@@ -129,3 +132,4 @@ async function changerMdp() {
 </script>
 </body>
 </html>
+
