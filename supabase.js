@@ -86,17 +86,18 @@ const db = createClient(SUPABASE_URL, SUPABASE_KEY);
   `;
   document.head.appendChild(style);
 
-  const container = document.createElement('div');
-  container.id = 'toast-container';
-
-  document.addEventListener('DOMContentLoaded', () => {
-    if (!document.getElementById('toast-container')) {
+  function appendContainer() {
+    if (!document.getElementById('toast-container') && document.body) {
+      const container = document.createElement('div');
+      container.id = 'toast-container';
       document.body.appendChild(container);
     }
-  });
+  }
 
-  if (document.body && !document.getElementById('toast-container')) {
-    document.body.appendChild(container);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', appendContainer);
+  } else {
+    appendContainer();
   }
 })();
 
@@ -128,7 +129,7 @@ function toast(msg, type = 'info', duration = 4000) {
   const closeBtn = t.querySelector('.toast-close');
   if (closeBtn) {
     closeBtn.addEventListener('click', function () {
-      t.remove();
+      if (t.parentNode) t.remove();
     });
   }
 
@@ -171,7 +172,7 @@ async function getUtilisateur() {
     const user = await getCurrentAuthUser();
     if (!user) return null;
 
-    // 1) Recherche classique par id
+    // 1) Recherche par id
     let res = await db
       .from('utilisateurs')
       .select('*, ecoles(*)')
@@ -180,7 +181,7 @@ async function getUtilisateur() {
 
     if (res.data) return res.data;
 
-    // 2) Fallback par auth_id si besoin
+    // 2) Fallback par auth_id
     res = await db
       .from('utilisateurs')
       .select('*, ecoles(*)')
@@ -367,7 +368,6 @@ IMPORTANT :
 */
 async function creerCompteAuth(emailInterne, mdpTemp, role = 'membre') {
   try {
-    // Tentative via Edge Function
     const res = await fetch(`${SUPABASE_URL}/functions/v1/create-school-user`, {
       method: 'POST',
       headers: {
@@ -396,7 +396,6 @@ async function creerCompteAuth(emailInterne, mdpTemp, role = 'membre') {
 
     console.warn('Edge Function indisponible ou en erreur, fallback signup utilisé.', json);
 
-    // Fallback de secours
     const fallbackRes = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
       method: 'POST',
       headers: {
@@ -437,7 +436,7 @@ async function creerCompteAuth(emailInterne, mdpTemp, role = 'membre') {
   }
 }
 
-// Alias pour compatibilité avec certains anciens fichiers
+// Alias de compatibilité
 async function createUserViaEdge(email, password, role) {
   return await creerCompteAuth(email, password, role);
 }
