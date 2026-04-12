@@ -364,305 +364,263 @@ const ROLES = {
   eleve: 'eleve.html'
 };
 
-// Vérifier session existante
-(async () => {
-  try {
-    const { data: { session } } = await db.auth.getSession();
-    if (session) {
-      let { data: u } = await db.from('utilisateurs').select('role, nom, prenom, ecole_id, premiere_connexion').eq('id', session.user.id).maybeSingle();
-      if (!u) {
-        const { data: u2 } = await db.from('utilisateurs').select('role, nom, prenom, ecole_id, premiere_connexion').eq('auth_id', session.user.id).maybeSingle();
-        u = u2;
-      }
-      if (u?.role) {
-        // Si premiere_connexion → déconnecter et rester sur index
-        if (u.premiere_connexion) {
-          await db.auth.signOut();
-          switchTab('premiere');
-          return;
-        }
-        localStorage.setItem('edu_user', JSON.stringify({ role: u.role, nom: u.nom, prenom: u.prenom, email: session.user.email }));
-        window.location.href = ROLES[u.role] || 'index.html';
-      }
-    }
-  } catch(e) { console.log('Pas de session active'); }
-})();
+let _typeConnexion = 'membre';
+let _premType = 'membre';
+let _oubliType = 'membre';
 
-function validerTel(input) {
-  const val = input.value.replace(/\D/g, '');
-  input.value = val;
-  const err = document.getElementById('tel-err');
-  if (val.length > 0 && (val.length !== 9 || val[0] !== '6')) {
-    err.style.display = 'block';
-  } else {
-    err.style.display = 'none';
-  }
+function normalizeMemberPart(value) {
+  return (value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').toLowerCase();
 }
 
-function onRoleChange() {
-  const role = document.getElementById('r-role').value;
-  const champsNom = document.getElementById('champs-nom');
-  if (role === 'professeur' || role === 'eleve') {
-    champsNom.style.display = 'none';
-  } else {
-    champsNom.style.display = 'grid';
-  }
+function buildInternalEmail(matricule, code) {
+  const left = normalizeMemberPart(matricule);
+  const right = normalizeMemberPart(code);
+  return `${left}@${right}.gn`;
 }
 
-function switchTab(t) {
-  document.querySelectorAll('.tab').forEach((el,i) => {
-    el.classList.toggle('active', (t==='login'&&i===0)||(t==='premiere'&&i===1)||(t==='oubli'&&i===2));
-  });
-  document.getElementById('form-login').style.display = t==='login' ? 'block' : 'none';
-  document.getElementById('form-premiere').style.display = t==='premiere' ? 'block' : 'none';
-  document.getElementById('form-oubli').style.display = t==='oubli' ? 'block' : 'none';
+function passwordError(password) {
+  if (password.length < 8) return 'Minimum 8 caractères.';
+  if (!/[A-Z]/.test(password)) return 'Ajoutez au moins une majuscule.';
+  if (!/[0-9]/.test(password)) return 'Ajoutez au moins un chiffre.';
+  if (!/[^A-Za-z0-9]/.test(password)) return 'Ajoutez au moins un symbole (!@#...).';
+  return '';
 }
- 
+
 function showErr(id, msg) {
   const el = document.getElementById(id);
-  el.textContent = msg; el.style.display = 'block';
-  setTimeout(() => el.style.display='none', 7000);
+  if (!el) return;
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => {
+    el.style.display = 'none';
+  }, 7000);
 }
 
 function showOk(id, msg) {
   const el = document.getElementById(id);
-  el.textContent = msg; el.style.display = 'block';
+  if (!el) return;
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function hideMsg(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = 'none';
 }
 
 function toggle(id) {
   const el = document.getElementById(id);
-  el.type = el.type==='password' ? 'text' : 'password';
+  if (!el) return;
+  el.type = el.type === 'password' ? 'text' : 'password';
 }
 
-function checkForce(mdp) {
-  document.getElementById('regles').style.display = mdp ? 'block' : 'none';
-  const checks = [
-    { id:'r1', ok: mdp.length >= 8 },
-    { id:'r2', ok: /[A-Z]/.test(mdp) },
-    { id:'r3', ok: /[0-9]/.test(mdp) },
-    { id:'r4', ok: /[^A-Za-z0-9]/.test(mdp) }
-  ];
-  let score = 0;
-  checks.forEach(c => {
-    const el = document.getElementById(c.id);
-    el.classList.toggle('ok', c.ok);
-    el.querySelector('.regle-dot').style.background = c.ok ? 'var(--accent-green)' : 'var(--border)';
-    if (c.ok) score++;
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((el, i) => {
+    el.classList.toggle(
+      'active',
+      (tab === 'login' && i === 0) ||
+      (tab === 'premiere' && i === 1) ||
+      (tab === 'oubli' && i === 2)
+    );
   });
-  const cfg = [
-    null,
-    { w:'25%', c:'var(--accent-red)', t:'Très faible' },
-    { w:'50%', c:'var(--accent-orange)', t:'Faible' },
-    { w:'75%', c:'var(--accent-blue)', t:'Correct' },
-    { w:'100%', c:'var(--accent-green)', t:'Fort ✓' }
-  ][score] || { w:'0%', c:'var(--border)', t:'Entrez un mot de passe' };
-  const f = document.getElementById('force-fill');
-  f.style.width = cfg.w; f.style.background = cfg.c;
-  const ft = document.getElementById('force-txt');
-  ft.textContent = cfg.t; ft.style.color = cfg.c;
+
+  document.getElementById('form-login').style.display = tab === 'login' ? 'block' : 'none';
+  document.getElementById('form-premiere').style.display = tab === 'premiere' ? 'block' : 'none';
+  document.getElementById('form-oubli').style.display = tab === 'oubli' ? 'block' : 'none';
 }
+
+function setTypeConnexion(type) {
+  _typeConnexion = type;
+
+  document.getElementById('login-membre').style.display = type === 'membre' ? 'block' : 'none';
+  document.getElementById('login-admin').style.display = type === 'admin' ? 'block' : 'none';
+
+  document.getElementById('btn-type-membre').style.background = type === 'membre' ? '#185FA5' : '#fff';
+  document.getElementById('btn-type-membre').style.color = type === 'membre' ? '#fff' : '#888';
+  document.getElementById('btn-type-membre').style.borderColor = type === 'membre' ? '#185FA5' : '#ddd';
+
+  document.getElementById('btn-type-admin').style.background = type === 'admin' ? '#7F77DD' : '#fff';
+  document.getElementById('btn-type-admin').style.color = type === 'admin' ? '#fff' : '#888';
+  document.getElementById('btn-type-admin').style.borderColor = type === 'admin' ? '#7F77DD' : '#ddd';
+}
+
+function setPremType(type) {
+  _premType = type;
+
+  document.getElementById('prem-membre').style.display = type === 'membre' ? 'block' : 'none';
+  document.getElementById('prem-admin').style.display = type === 'admin' ? 'block' : 'none';
+
+  document.getElementById('pbtn-membre').style.background = type === 'membre' ? '#185FA5' : '#fff';
+  document.getElementById('pbtn-membre').style.color = type === 'membre' ? '#fff' : '#888';
+  document.getElementById('pbtn-membre').style.borderColor = type === 'membre' ? '#185FA5' : '#ddd';
+
+  document.getElementById('pbtn-admin').style.background = type === 'admin' ? '#7F77DD' : '#fff';
+  document.getElementById('pbtn-admin').style.color = type === 'admin' ? '#fff' : '#888';
+  document.getElementById('pbtn-admin').style.borderColor = type === 'admin' ? '#7F77DD' : '#ddd';
+}
+
+function setOubliType(type) {
+  _oubliType = type;
+
+  document.getElementById('oubli-membre').style.display = type === 'membre' ? 'block' : 'none';
+  document.getElementById('oubli-admin').style.display = type === 'admin' ? 'block' : 'none';
+  document.getElementById('oubli-note-membre').style.display = type === 'membre' ? 'block' : 'none';
+
+  const oubliFields = document.querySelectorAll('#form-oubli .field');
+  if (oubliFields[2]) oubliFields[2].style.display = type === 'membre' ? 'block' : 'none';
+  if (oubliFields[3]) oubliFields[3].style.display = type === 'membre' ? 'block' : 'none';
+
+  document.getElementById('obtn-membre').style.background = type === 'membre' ? '#EF9F27' : '#fff';
+  document.getElementById('obtn-membre').style.color = type === 'membre' ? '#fff' : '#888';
+  document.getElementById('obtn-membre').style.borderColor = type === 'membre' ? '#EF9F27' : '#ddd';
+
+  document.getElementById('obtn-admin').style.background = type === 'admin' ? '#7F77DD' : '#fff';
+  document.getElementById('obtn-admin').style.color = type === 'admin' ? '#fff' : '#888';
+  document.getElementById('obtn-admin').style.borderColor = type === 'admin' ? '#7F77DD' : '#ddd';
+}
+
 function checkForcePremiereConnexion(mdp) {
   document.getElementById('regles-p').style.display = mdp ? 'block' : 'none';
+
   const checks = [
-    { id:'rp1', ok: mdp.length >= 8 },
-    { id:'rp2', ok: /[A-Z]/.test(mdp) },
-    { id:'rp3', ok: /[0-9]/.test(mdp) },
-    { id:'rp4', ok: /[^A-Za-z0-9]/.test(mdp) }
+    { id: 'rp1', ok: mdp.length >= 8 },
+    { id: 'rp2', ok: /[A-Z]/.test(mdp) },
+    { id: 'rp3', ok: /[0-9]/.test(mdp) },
+    { id: 'rp4', ok: /[^A-Za-z0-9]/.test(mdp) }
   ];
+
   let score = 0;
-  checks.forEach(function(c) {
-    var el = document.getElementById(c.id);
+  checks.forEach((c) => {
+    const el = document.getElementById(c.id);
+    if (!el) return;
     el.classList.toggle('ok', c.ok);
-    el.querySelector('.regle-dot').style.background = c.ok ? 'var(--accent-green)' : '#ddd';
+    const dot = el.querySelector('.regle-dot');
+    if (dot) dot.style.background = c.ok ? 'var(--accent-green)' : '#ddd';
     if (c.ok) score++;
   });
-  var cfg = [null,
-    { w:'25%', c:'var(--accent-red)', t:'Très faible' },
-    { w:'50%', c:'var(--accent-orange)', t:'Faible' },
-    { w:'75%', c:'var(--accent-blue)', t:'Correct' },
-    { w:'100%', c:'var(--accent-green)', t:'Fort ✓' }
-  ][score] || { w:'0%', c:'#ddd', t:'Entrez un mot de passe' };
+
+  const cfg = [
+    null,
+    { w: '25%', c: 'var(--accent-red)', t: 'Très faible' },
+    { w: '50%', c: 'var(--accent-orange)', t: 'Faible' },
+    { w: '75%', c: 'var(--accent-blue)', t: 'Correct' },
+    { w: '100%', c: 'var(--accent-green)', t: 'Fort ✓' }
+  ][score] || { w: '0%', c: '#ddd', t: 'Entrez un mot de passe' };
+
   document.getElementById('force-fill-p').style.width = cfg.w;
   document.getElementById('force-fill-p').style.background = cfg.c;
   document.getElementById('force-txt-p').textContent = cfg.t;
   document.getElementById('force-txt-p').style.color = cfg.c;
 }
 
-var _premType = 'membre';
-
-function setPremType(type) {
-  _premType = type;
-  document.getElementById('prem-membre').style.display = type === 'membre' ? 'block' : 'none';
-  document.getElementById('prem-admin').style.display = type === 'admin' ? 'block' : 'none';
-  document.getElementById('pbtn-membre').style.background = type === 'membre' ? '#185FA5' : '#fff';
-  document.getElementById('pbtn-membre').style.color = type === 'membre' ? '#fff' : '#888';
-  document.getElementById('pbtn-membre').style.borderColor = type === 'membre' ? '#185FA5' : '#ddd';
-  document.getElementById('pbtn-admin').style.background = type === 'admin' ? '#7F77DD' : '#fff';
-  document.getElementById('pbtn-admin').style.color = type === 'admin' ? '#fff' : '#888';
-  document.getElementById('pbtn-admin').style.borderColor = type === 'admin' ? '#7F77DD' : '#ddd';
-}
-
-async function doPremiereConnexion() {
-  var mdpTemp = document.getElementById('p-mdp').value;
-  var mdpNew = document.getElementById('p-mdp-new').value;
-  var mdpConfirm = document.getElementById('p-mdp-confirm').value;
-  var email = '';
-
-  if (_premType === 'admin') {
-    var emailAdmin = document.getElementById('p-email-admin').value.trim().toLowerCase();
-    if (!emailAdmin || !mdpTemp || !mdpNew || !mdpConfirm) return showErr('err-premiere','Remplissez tous les champs.');
-    email = emailAdmin;
-  } else {
-    var matricule = document.getElementById('p-matricule').value.trim().toUpperCase();
-    var code = document.getElementById('p-code').value.trim().toUpperCase();
-    if (!matricule || !code || !mdpTemp || !mdpNew || !mdpConfirm) return showErr('err-premiere','Remplissez tous les champs.');
-    email = matricule.replace(/-/g,'').toLowerCase() + '@' + code.replace(/-/g,'').toLowerCase() + '.gn';
-  }
-
-  if (mdpNew !== mdpConfirm) return showErr('err-premiere','Les mots de passe ne correspondent pas.');
-  if (mdpNew.length < 8) return showErr('err-premiere','Minimum 8 caractères.');
-  if (!/[A-Z]/.test(mdpNew)) return showErr('err-premiere','Ajoutez au moins une majuscule.');
-  if (!/[0-9]/.test(mdpNew)) return showErr('err-premiere','Ajoutez au moins un chiffre.');
-  if (!/[^A-Za-z0-9]/.test(mdpNew)) return showErr('err-premiere','Ajoutez au moins un symbole (!@#...).');
-
-  var btn = document.querySelector('#form-premiere .btn-login');
-  btn.disabled = true; btn.textContent = 'Vérification...';
-
-  try {
-    var res = await db.auth.signInWithPassword({ email: email, password: mdpTemp });
-    if (res.error) throw new Error(_premType === 'admin' ? 'Email ou mot de passe temporaire incorrect.' : 'Matricule, code école ou mot de passe temporaire incorrect.');
-
-    var userId = res.data.user.id;
-    var { data: u } = await db.from('utilisateurs').select('id,role,premiere_connexion').eq('id', userId).maybeSingle();
-    if (!u) {
-      var { data: u2 } = await db.from('utilisateurs').select('id,role,premiere_connexion').eq('auth_id', userId).maybeSingle();
-      u = u2;
-    }
-    if (!u) throw new Error('Profil introuvable. Contactez votre administrateur.');
-    if (!u.premiere_connexion) throw new Error('Ce compte a déjà été activé. Utilisez l\'onglet Connexion.');
-
-    var resUpdate = await db.auth.updateUser({ password: mdpNew });
-    if (resUpdate.error) throw resUpdate.error;
-
-    // Mettre à jour premiere_connexion partout
-    await db.from('utilisateurs').update({ premiere_connexion: false, mdp_temp: null }).eq('id', u.id);
-    await db.from('utilisateurs').update({ premiere_connexion: false, mdp_temp: null }).eq('auth_id', userId);
-    await db.from('eleves').update({ premiere_connexion: false, mdp_temp: null }).eq('auth_id', userId);
-
-    // Déconnecter proprement puis reconnecter pour avoir une session fraîche
-    await db.auth.signOut();
-
-    var ok = document.getElementById('err-premiere');
-    ok.textContent = '✅ Compte activé ! Connectez-vous maintenant avec votre nouveau mot de passe.';
-    ok.style.background = 'var(--accent-green-light)';
-    ok.style.color = 'var(--accent-green)';
-    ok.style.display = 'block';
-
-    // Revenir sur l'onglet connexion après 2 secondes
-    setTimeout(function() {
-      switchTab('login');
-      // Pré-remplir selon le rôle
-      if (u.role === 'admin_ecole') {
-        setTypeConnexion('admin');
-      } else {
-        setTypeConnexion('membre');
-      }
-      ok.style.display = 'none';
-    }, 2500);
-
-  } catch(e) {
-    showErr('err-premiere', e.message);
-  }
-  btn.disabled = false; btn.textContent = '🔐 Activer mon compte';
-}
 function checkForceOubli(mdp) {
-  var cfg = mdp.length === 0 ? { w:'0%', c:'#ddd', t:'Entrez un mot de passe' } :
-    [null,
-      { w:'25%', c:'var(--accent-red)', t:'Très faible' },
-      { w:'50%', c:'var(--accent-orange)', t:'Faible' },
-      { w:'75%', c:'var(--accent-blue)', t:'Correct' },
-      { w:'100%', c:'var(--accent-green)', t:'Fort ✓' }
-    ][[mdp.length>=8, /[A-Z]/.test(mdp), /[0-9]/.test(mdp), /[^A-Za-z0-9]/.test(mdp)].filter(Boolean).length] || { w:'0%', c:'#ddd', t:'' };
+  const score = [
+    mdp.length >= 8,
+    /[A-Z]/.test(mdp),
+    /[0-9]/.test(mdp),
+    /[^A-Za-z0-9]/.test(mdp)
+  ].filter(Boolean).length;
+
+  const cfg = mdp.length === 0
+    ? { w: '0%', c: '#ddd', t: 'Entrez un mot de passe' }
+    : [
+        null,
+        { w: '25%', c: 'var(--accent-red)', t: 'Très faible' },
+        { w: '50%', c: 'var(--accent-orange)', t: 'Faible' },
+        { w: '75%', c: 'var(--accent-blue)', t: 'Correct' },
+        { w: '100%', c: 'var(--accent-green)', t: 'Fort ✓' }
+      ][score];
+
   document.getElementById('force-fill-o').style.width = cfg.w;
   document.getElementById('force-fill-o').style.background = cfg.c;
   document.getElementById('force-txt-o').textContent = cfg.t;
   document.getElementById('force-txt-o').style.color = cfg.c;
 }
 
-var _oubliType = 'membre';
+async function getUserProfileByAuthId(authUserId) {
+  let { data: userById, error: err1 } = await db
+    .from('utilisateurs')
+    .select('id, auth_id, role, nom, prenom, ecole_id, premiere_connexion, actif')
+    .eq('id', authUserId)
+    .maybeSingle();
 
-function setOubliType(type) {
-  _oubliType = type;
-  document.getElementById('oubli-membre').style.display = type === 'membre' ? 'block' : 'none';
-  document.getElementById('oubli-admin').style.display = type === 'admin' ? 'block' : 'none';
-  document.getElementById('oubli-note-membre').style.display = type === 'membre' ? 'block' : 'none';
-  // Champs mdp visibles seulement pour membre
-  document.querySelector('#form-oubli .field:nth-last-child(3)').style.display = type === 'membre' ? 'block' : 'none';
-  document.querySelector('#form-oubli .field:nth-last-child(2)').style.display = type === 'membre' ? 'block' : 'none';
-  document.getElementById('obtn-membre').style.background = type === 'membre' ? '#EF9F27' : '#fff';
-  document.getElementById('obtn-membre').style.color = type === 'membre' ? '#fff' : '#888';
-  document.getElementById('obtn-membre').style.borderColor = type === 'membre' ? '#EF9F27' : '#ddd';
-  document.getElementById('obtn-admin').style.background = type === 'admin' ? '#7F77DD' : '#fff';
-  document.getElementById('obtn-admin').style.color = type === 'admin' ? '#fff' : '#888';
-  document.getElementById('obtn-admin').style.borderColor = type === 'admin' ? '#7F77DD' : '#ddd';
+  if (err1) throw err1;
+  if (userById) return userById;
+
+  let { data: userByAuth, error: err2 } = await db
+    .from('utilisateurs')
+    .select('id, auth_id, role, nom, prenom, ecole_id, premiere_connexion, actif')
+    .eq('auth_id', authUserId)
+    .maybeSingle();
+
+  if (err2) throw err2;
+  return userByAuth || null;
 }
 
-async function demanderResetMdp() {
-  var btn = document.querySelector('#form-oubli .btn-login');
-  btn.disabled = true; btn.textContent = 'Envoi en cours...';
+async function updateLastLogin(authUserId) {
+  const now = new Date().toISOString();
+  await db.from('utilisateurs').update({ derniere_connexion: now }).eq('id', authUserId);
+  await db.from('utilisateurs').update({ derniere_connexion: now }).eq('auth_id', authUserId);
+}
 
+function saveLocalUser(profile, email) {
+  localStorage.setItem(
+    'edu_user',
+    JSON.stringify({
+      role: profile.role,
+      nom: profile.nom,
+      prenom: profile.prenom,
+      ecole_id: profile.ecole_id,
+      email: email,
+      demo: false
+    })
+  );
+}
+
+async function redirectIfSessionExists() {
   try {
-    if (_oubliType === 'admin') {
-      // Directeur — envoyer lien par email
-      var emailAdmin = document.getElementById('o-email-admin').value.trim().toLowerCase();
-      if (!emailAdmin) { btn.disabled = false; btn.textContent = '📩 Réinitialiser mon mot de passe'; return showErr('err-oubli','Entrez votre adresse email.'); }
-      var resReset = await db.auth.resetPasswordForEmail(emailAdmin, {
-        redirectTo: window.location.origin + '/changer-mdp.html'
-      });
-      if (resReset.error) throw new Error('Email introuvable ou invalide.');
-      var ok = document.getElementById('ok-oubli');
-      ok.textContent = '✅ Un lien de réinitialisation a été envoyé à ' + emailAdmin + '. Vérifiez votre boîte mail.';
-      ok.style.display = 'block';
-      document.getElementById('err-oubli').style.display = 'none';
-    } else {
-      // Élève/Prof/Parent
-      var matricule = document.getElementById('o-matricule').value.trim().toUpperCase();
-      var code = document.getElementById('o-code').value.trim().toUpperCase();
-      var mdpNew = document.getElementById('o-mdp-new').value;
-      var mdpConfirm = document.getElementById('o-mdp-confirm').value;
-      if (!matricule||!code||!mdpNew||!mdpConfirm) { btn.disabled = false; btn.textContent = '📩 Réinitialiser mon mot de passe'; return showErr('err-oubli','Remplissez tous les champs.'); }
-      if (mdpNew !== mdpConfirm) { btn.disabled = false; btn.textContent = '📩 Réinitialiser mon mot de passe'; return showErr('err-oubli','Les mots de passe ne correspondent pas.'); }
-      if (mdpNew.length < 8) { btn.disabled = false; btn.textContent = '📩 Réinitialiser mon mot de passe'; return showErr('err-oubli','Minimum 8 caractères.'); }
-      if (!/[A-Z]/.test(mdpNew)) { btn.disabled = false; btn.textContent = '📩 Réinitialiser mon mot de passe'; return showErr('err-oubli','Ajoutez au moins une majuscule.'); }
-      if (!/[0-9]/.test(mdpNew)) { btn.disabled = false; btn.textContent = '📩 Réinitialiser mon mot de passe'; return showErr('err-oubli','Ajoutez au moins un chiffre.'); }
-      if (!/[^A-Za-z0-9]/.test(mdpNew)) { btn.disabled = false; btn.textContent = '📩 Réinitialiser mon mot de passe'; return showErr('err-oubli','Ajoutez au moins un symbole (!@#...).'); }
-      var email = matricule.replace(/[^a-zA-Z0-9]/g,'').toLowerCase() + '@' + code.replace(/[^a-zA-Z0-9]/g,'').toLowerCase() + '.gn';
-      var resReset = await db.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + '/changer-mdp.html'
-      });
-      if (resReset.error) throw new Error('Impossible de réinitialiser. Vérifiez votre matricule et code école.');
-      var ok = document.getElementById('ok-oubli');
-      ok.textContent = '✅ Lien envoyé ! Vérifiez votre email ou contactez votre directeur.';
-      ok.style.display = 'block';
-      document.getElementById('err-oubli').style.display = 'none';
-    }
-  } catch(e) {
-    showErr('err-oubli', e.message);
-  }
-  btn.disabled = false; btn.textContent = '📩 Réinitialiser mon mot de passe';
-}
-var _typeConnexion = 'membre';
+    const { data: { session } } = await db.auth.getSession();
+    if (!session?.user) return;
 
-function setTypeConnexion(type) {
-  _typeConnexion = type;
-  document.getElementById('login-membre').style.display = type === 'membre' ? 'block' : 'none';
-  document.getElementById('login-admin').style.display = type === 'admin' ? 'block' : 'none';
-  document.getElementById('btn-type-membre').style.background = type === 'membre' ? '#185FA5' : '#fff';
-  document.getElementById('btn-type-membre').style.color = type === 'membre' ? '#fff' : '#888';
-  document.getElementById('btn-type-membre').style.borderColor = type === 'membre' ? '#185FA5' : '#ddd';
-  document.getElementById('btn-type-admin').style.background = type === 'admin' ? '#7F77DD' : '#fff';
-  document.getElementById('btn-type-admin').style.color = type === 'admin' ? '#fff' : '#888';
-  document.getElementById('btn-type-admin').style.borderColor = type === 'admin' ? '#7F77DD' : '#ddd';
+    let profile = await getUserProfileByAuthId(session.user.id);
+
+    if (!profile && session.user.email === 'ibra-cisse@outlook.fr') {
+      await db.from('utilisateurs').upsert({
+        id: session.user.id,
+        auth_id: session.user.id,
+        nom: 'Cissé',
+        prenom: 'Ibrahima',
+        email: session.user.email,
+        role: 'super_admin',
+        actif: true,
+        premiere_connexion: false
+      });
+
+      profile = {
+        id: session.user.id,
+        auth_id: session.user.id,
+        role: 'super_admin',
+        nom: 'Cissé',
+        prenom: 'Ibrahima',
+        ecole_id: null,
+        premiere_connexion: false
+      };
+    }
+
+    if (!profile?.role) return;
+
+    if (profile.premiere_connexion) {
+      await db.auth.signOut();
+      switchTab('premiere');
+      return;
+    }
+
+    saveLocalUser(profile, session.user.email);
+    window.location.href = ROLES[profile.role] || 'index.html';
+  } catch (e) {
+    console.log('Pas de session active ou profil non trouvé.');
+  }
 }
 
 function loginDispatch() {
@@ -674,168 +632,317 @@ function loginDispatch() {
 }
 
 async function doLoginAdmin() {
-  var email = document.getElementById('l-email-admin').value.trim().toLowerCase();
-  var mdp = document.getElementById('l-mdp').value;
-  if (!email || !mdp) return showErr('err-login', 'Email et mot de passe obligatoires.');
+  hideMsg('err-login');
+  hideMsg('ok-login');
 
-  var btn = document.getElementById('btn-login');
-  btn.disabled = true; btn.textContent = 'Connexion en cours...';
+  const email = document.getElementById('l-email-admin').value.trim().toLowerCase();
+  const mdp = document.getElementById('l-mdp').value;
+
+  if (!email || !mdp) {
+    return showErr('err-login', 'Email et mot de passe obligatoires.');
+  }
+
+  const btn = document.getElementById('btn-login');
+  btn.disabled = true;
+  btn.textContent = 'Connexion en cours...';
 
   try {
-    var { data, error } = await db.auth.signInWithPassword({ email: email, password: mdp });
+    const { data, error } = await db.auth.signInWithPassword({
+      email,
+      password: mdp
+    });
+
     if (error) throw error;
 
-    var u = null;
-    var res1 = await db.from('utilisateurs').select('role, nom, prenom, ecole_id, premiere_connexion').eq('id', data.user.id).maybeSingle();
-    u = res1.data;
-    if (!u) {
-      var res2 = await db.from('utilisateurs').select('role, nom, prenom, ecole_id, premiere_connexion').eq('auth_id', data.user.id).maybeSingle();
-      u = res2.data;
+    let profile = await getUserProfileByAuthId(data.user.id);
+
+    if (!profile && email === 'ibra-cisse@outlook.fr') {
+      await db.from('utilisateurs').upsert({
+        id: data.user.id,
+        auth_id: data.user.id,
+        nom: 'Cissé',
+        prenom: 'Ibrahima',
+        email: email,
+        role: 'super_admin',
+        actif: true,
+        premiere_connexion: false
+      });
+
+      profile = {
+        id: data.user.id,
+        auth_id: data.user.id,
+        role: 'super_admin',
+        nom: 'Cissé',
+        prenom: 'Ibrahima',
+        ecole_id: null,
+        premiere_connexion: false
+      };
     }
 
-    // Super admin
-    if (!u && email === 'ibra-cisse@outlook.fr') {
-      await db.from('utilisateurs').upsert({ id: data.user.id, nom: 'Cissé', prenom: 'Ibrahima', email: email, role: 'super_admin', actif: true });
-      localStorage.setItem('edu_user', JSON.stringify({ role:'super_admin', nom:'Cissé', prenom:'Ibrahima', email: email }));
-      window.location.href = 'super-admin.html'; return;
+    if (!profile) {
+      throw new Error('Profil introuvable. Contactez le super administrateur.');
     }
 
-    if (!u) throw new Error('Profil introuvable. Contactez le super administrateur.');
-
-    // Vérifier que c'est bien un admin ou super admin
-    if (u.role !== 'admin_ecole' && u.role !== 'super_admin') {
+    if (profile.role !== 'admin_ecole' && profile.role !== 'super_admin') {
       await db.auth.signOut();
-      throw new Error('Ce compte n\'est pas un compte directeur. Utilisez l\'onglet Élève/Prof/Parent.');
+      throw new Error('Ce compte n\'est pas un compte directeur. Utilisez l\'onglet Élève / Prof / Parent.');
     }
 
-    await db.from('utilisateurs').update({ derniere_connexion: new Date().toISOString() }).eq('id', data.user.id);
-    localStorage.setItem('edu_user', JSON.stringify({ role: u.role, nom: u.nom, prenom: u.prenom, ecole_id: u.ecole_id, email: email, demo: false }));
-
-    if (u.premiere_connexion) {
+    if (profile.premiere_connexion) {
       await db.auth.signOut();
       switchTab('premiere');
       return;
     }
 
-    window.location.href = ROLES[u.role] || 'index.html';
+    await updateLastLogin(data.user.id);
+    saveLocalUser(profile, email);
 
-  } catch(e) {
-    showErr('err-login', e.message === 'Invalid login credentials' ? '❌ Email ou mot de passe incorrect.' : e.message);
+    window.location.href = ROLES[profile.role] || 'index.html';
+  } catch (e) {
+    const msg = e.message === 'Invalid login credentials'
+      ? '❌ Email ou mot de passe incorrect.'
+      : e.message;
+    showErr('err-login', msg);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Se connecter';
   }
-  btn.disabled = false; btn.textContent = 'Se connecter';
 }
 
 async function doLogin() {
-  var matricule = document.getElementById('l-matricule').value.trim().toUpperCase();
-  var code = document.getElementById('l-code').value.trim().toUpperCase();
-  var mdp = document.getElementById('l-mdp').value;
-  if (!matricule || !code || !mdp) return showErr('err-login', 'Veuillez remplir tous les champs.');
+  hideMsg('err-login');
+  hideMsg('ok-login');
 
-  var btn = document.getElementById('btn-login');
-  btn.disabled = true; btn.textContent = 'Connexion en cours...';
+  const matricule = document.getElementById('l-matricule').value.trim().toUpperCase();
+  const code = document.getElementById('l-code').value.trim().toUpperCase();
+  const mdp = document.getElementById('l-mdp').value;
+
+  if (!matricule || !code || !mdp) {
+    return showErr('err-login', 'Veuillez remplir tous les champs.');
+  }
+
+  const btn = document.getElementById('btn-login');
+  btn.disabled = true;
+  btn.textContent = 'Connexion en cours...';
 
   try {
-    // Email interne généré — jamais exposé à l'utilisateur
-    var email = matricule.replace(/-/g,'').toLowerCase() + '@' + code.replace(/-/g,'').toLowerCase() + '.gn';
+    const email = buildInternalEmail(matricule, code);
 
-    var { data, error } = await db.auth.signInWithPassword({ email: email, password: mdp });
+    const { data, error } = await db.auth.signInWithPassword({
+      email,
+      password: mdp
+    });
+
     if (error) throw error;
 
-    var u = null;
-    var res1 = await db.from('utilisateurs').select('role, nom, prenom, ecole_id, premiere_connexion').eq('id', data.user.id).maybeSingle();
-    u = res1.data;
-    if (!u) {
-      var res2 = await db.from('utilisateurs').select('role, nom, prenom, ecole_id, premiere_connexion').eq('auth_id', data.user.id).maybeSingle();
-      u = res2.data;
-    }
-    if (!u) throw new Error('Profil introuvable. Contactez votre directeur.');
+    const profile = await getUserProfileByAuthId(data.user.id);
 
-    // Bloquer les admins qui tentent de passer par ici
-    if (u.role === 'admin_ecole' || u.role === 'super_admin') {
+    if (!profile) {
+      throw new Error('Profil introuvable. Contactez votre directeur.');
+    }
+
+    if (profile.role === 'admin_ecole' || profile.role === 'super_admin') {
       await db.auth.signOut();
-      throw new Error('Utilisez l\'onglet Directeur/Admin pour vous connecter.');
+      throw new Error('Utilisez l\'onglet Directeur / Admin pour vous connecter.');
     }
 
-    await db.from('utilisateurs').update({ derniere_connexion: new Date().toISOString() }).eq('id', data.user.id);
-    localStorage.setItem('edu_user', JSON.stringify({ role: u.role, nom: u.nom, prenom: u.prenom, ecole_id: u.ecole_id, email: email, demo: false }));
-
-    if (u.premiere_connexion) {
+    if (profile.premiere_connexion) {
       await db.auth.signOut();
       switchTab('premiere');
       return;
     }
 
-    window.location.href = ROLES[u.role] || 'index.html';
+    await updateLastLogin(data.user.id);
+    saveLocalUser(profile, email);
 
-  } catch(e) {
-    showErr('err-login', e.message === 'Invalid login credentials' ? '❌ Matricule, code école ou mot de passe incorrect.' : e.message);
+    window.location.href = ROLES[profile.role] || 'index.html';
+  } catch (e) {
+    const msg = e.message === 'Invalid login credentials'
+      ? '❌ Matricule, code école ou mot de passe incorrect.'
+      : e.message;
+    showErr('err-login', msg);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Se connecter';
   }
-  btn.disabled = false; btn.textContent = 'Se connecter';
 }
 
-async function doRegister() {
-  const role = document.getElementById('r-role').value;
-  const prenom = document.getElementById('r-prenom').value.trim();
-  const nom = document.getElementById('r-nom').value.trim();
-  const tel = document.getElementById('r-tel').value.trim();
-  const email = document.getElementById('r-email').value.trim();
-  const mdp = document.getElementById('r-mdp').value;
-  const code = document.getElementById('r-code').value.trim().toUpperCase();
-  const matricule = document.getElementById('r-matricule').value.trim().toUpperCase();
+async function doPremiereConnexion() {
+  hideMsg('err-premiere');
 
-  if (role === 'parent' && (!prenom || !nom)) return showErr('err-reg', 'Prénom et nom obligatoires pour les parents.');
-  if (!mdp || !code || !matricule) return showErr('err-reg', 'Mot de passe, code école et matricule obligatoires.');
-  if (tel && (tel.length !== 9 || tel[0] !== '6')) return showErr('err-reg', 'Numéro de téléphone invalide.');
+  const mdpTemp = document.getElementById('p-mdp').value;
+  const mdpNew = document.getElementById('p-mdp-new').value;
+  const mdpConfirm = document.getElementById('p-mdp-confirm').value;
 
-  const errMdp = validerMotDePasse(mdp);
-  if (errMdp.length > 0) return showErr('err-reg', errMdp[0]);
+  let email = '';
 
-  const btn = document.getElementById('btn-reg');
-  btn.disabled = true; btn.textContent = 'Création en cours...';
+  if (_premType === 'admin') {
+    const emailAdmin = document.getElementById('p-email-admin').value.trim().toLowerCase();
+    if (!emailAdmin || !mdpTemp || !mdpNew || !mdpConfirm) {
+      return showErr('err-premiere', 'Remplissez tous les champs.');
+    }
+    email = emailAdmin;
+  } else {
+    const matricule = document.getElementById('p-matricule').value.trim().toUpperCase();
+    const code = document.getElementById('p-code').value.trim().toUpperCase();
+
+    if (!matricule || !code || !mdpTemp || !mdpNew || !mdpConfirm) {
+      return showErr('err-premiere', 'Remplissez tous les champs.');
+    }
+    email = buildInternalEmail(matricule, code);
+  }
+
+  if (mdpNew !== mdpConfirm) {
+    return showErr('err-premiere', 'Les mots de passe ne correspondent pas.');
+  }
+
+  const err = passwordError(mdpNew);
+  if (err) {
+    return showErr('err-premiere', err);
+  }
+
+  const btn = document.querySelector('#form-premiere .btn-login');
+  btn.disabled = true;
+  btn.textContent = 'Vérification...';
 
   try {
-    const { data: ecole, error: eErr } = await db.from('ecoles').select('id,nom,abonnement_actif').eq('code_acces', code).single();
-    if (eErr || !ecole) return showErr('err-reg', 'Code établissement invalide.');
-    if (!ecole.abonnement_actif) return showErr('err-reg', "Cet établissement n'a pas d'abonnement actif.");
+    const signInRes = await db.auth.signInWithPassword({
+      email,
+      password: mdpTemp
+    });
 
-    if (role === 'professeur') {
-      const { data: p } = await db.from('utilisateurs').select('id, compte_active').eq('numero_matricule', matricule).eq('ecole_id', ecole.id).maybeSingle();
-      if (!p) return showErr('err-reg', 'Matricule invalide. Vérifiez avec votre directeur.');
-      if (p.compte_active) return showErr('err-reg', 'Ce matricule a déjà un compte actif.');
-    }
-    if (role === 'eleve') {
-      const { data: p } = await db.from('eleves').select('id, compte_active').eq('numero_matricule', matricule).eq('ecole_id', ecole.id).maybeSingle();
-      if (!p) return showErr('err-reg', 'Matricule invalide. Vérifiez avec votre directeur.');
-      if (p.compte_active) return showErr('err-reg', 'Ce matricule a déjà un compte actif.');
-    }
-    if (role === 'parent') {
-      const { data: p } = await db.from('utilisateurs').select('id, compte_active').eq('numero_matricule', matricule).eq('ecole_id', ecole.id).maybeSingle();
-      if (!p) return showErr('err-reg', 'Matricule invalide. Vérifiez avec votre directeur.');
-      if (p.compte_active) return showErr('err-reg', 'Ce matricule a déjà un compte actif.');
+    if (signInRes.error) {
+      throw new Error(
+        _premType === 'admin'
+          ? 'Email ou mot de passe temporaire incorrect.'
+          : 'Matricule, code école ou mot de passe temporaire incorrect.'
+      );
     }
 
-    const emailAuth = email || (matricule.replace(/-/g,'').toLowerCase() + '@' + code.replace(/-/g,'').toLowerCase() + '.gn');
-    const { data: auth, error: aErr } = await db.auth.signUp({ email: emailAuth, password: mdp });
-    if (aErr) throw aErr;
+    const authUserId = signInRes.data.user.id;
+    const profile = await getUserProfileByAuthId(authUserId);
 
-    if (auth.user) {
-      if (role === 'professeur') {
-        await db.from('utilisateurs').update({ auth_id: auth.user.id, email: emailAuth, compte_active: true, actif: true, telephone: tel ? '+224' + tel : null }).eq('numero_matricule', matricule).eq('ecole_id', ecole.id);
-      } else if (role === 'eleve') {
-        await db.from('eleves').update({ compte_active: true, auth_id: auth.user.id, email: emailAuth }).eq('numero_matricule', matricule).eq('ecole_id', ecole.id);
-        await db.from('utilisateurs').insert([{ id: auth.user.id, nom, prenom, email: emailAuth, role: 'eleve', telephone: tel ? '+224'+tel : null, ecole_id: ecole.id, actif: true, compte_active: true, numero_matricule: matricule }]);
+    if (!profile) {
+      throw new Error('Profil introuvable. Contactez votre administrateur.');
+    }
+
+    if (!profile.premiere_connexion) {
+      throw new Error('Ce compte a déjà été activé. Utilisez l\'onglet Connexion.');
+    }
+
+    const updateRes = await db.auth.updateUser({ password: mdpNew });
+    if (updateRes.error) throw updateRes.error;
+
+    await db.from('utilisateurs').update({
+      premiere_connexion: false,
+      mdp_temp: null
+    }).eq('id', profile.id);
+
+    await db.from('utilisateurs').update({
+      premiere_connexion: false,
+      mdp_temp: null
+    }).eq('auth_id', authUserId);
+
+    await db.from('eleves').update({
+      premiere_connexion: false,
+      mdp_temp: null
+    }).eq('auth_id', authUserId);
+
+    await db.auth.signOut();
+
+    const ok = document.getElementById('err-premiere');
+    ok.textContent = '✅ Compte activé ! Connectez-vous maintenant avec votre nouveau mot de passe.';
+    ok.style.background = 'var(--accent-green-light)';
+    ok.style.color = 'var(--accent-green)';
+    ok.style.display = 'block';
+
+    setTimeout(() => {
+      switchTab('login');
+      if (profile.role === 'admin_ecole' || profile.role === 'super_admin') {
+        setTypeConnexion('admin');
       } else {
-        await db.from('utilisateurs').update({ auth_id: auth.user.id, email: emailAuth, compte_active: true, actif: true, telephone: tel ? '+224' + tel : null }).eq('numero_matricule', matricule).eq('ecole_id', ecole.id);
+        setTypeConnexion('membre');
       }
-    }
-
-    showOk('ok-reg', `✅ Compte créé pour ${ecole.nom} ! Redirection...`);
-    setTimeout(() => window.location.href = 'index.html', 2000);
-  } catch(e) {
-    showErr('err-reg', e.message || 'Erreur lors de la création.');
+      ok.style.display = 'none';
+    }, 2500);
+  } catch (e) {
+    showErr('err-premiere', e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔐 Activer mon compte';
   }
-  btn.disabled = false; btn.textContent = 'Créer mon compte';
 }
+
+async function demanderResetMdp() {
+  hideMsg('err-oubli');
+  hideMsg('ok-oubli');
+
+  const btn = document.querySelector('#form-oubli .btn-login');
+  btn.disabled = true;
+  btn.textContent = 'Envoi en cours...';
+
+  try {
+    if (_oubliType === 'admin') {
+      const emailAdmin = document.getElementById('o-email-admin').value.trim().toLowerCase();
+
+      if (!emailAdmin) {
+        throw new Error('Entrez votre adresse email.');
+      }
+
+      const resReset = await db.auth.resetPasswordForEmail(emailAdmin, {
+        redirectTo: window.location.origin + '/changer-mdp.html'
+      });
+
+      if (resReset.error) {
+        throw new Error('Email introuvable ou invalide.');
+      }
+
+      showOk('ok-oubli', '✅ Un lien de réinitialisation a été envoyé à ' + emailAdmin + '. Vérifiez votre boîte mail.');
+    } else {
+      const matricule = document.getElementById('o-matricule').value.trim().toUpperCase();
+      const code = document.getElementById('o-code').value.trim().toUpperCase();
+      const mdpNew = document.getElementById('o-mdp-new').value;
+      const mdpConfirm = document.getElementById('o-mdp-confirm').value;
+
+      if (!matricule || !code || !mdpNew || !mdpConfirm) {
+        throw new Error('Remplissez tous les champs.');
+      }
+
+      if (mdpNew !== mdpConfirm) {
+        throw new Error('Les mots de passe ne correspondent pas.');
+      }
+
+      const err = passwordError(mdpNew);
+      if (err) {
+        throw new Error(err);
+      }
+
+      const email = buildInternalEmail(matricule, code);
+
+      const resReset = await db.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + '/changer-mdp.html'
+      });
+
+      if (resReset.error) {
+        throw new Error('Impossible de réinitialiser. Vérifiez votre matricule et code école.');
+      }
+
+      showOk('ok-oubli', '✅ Lien envoyé ! Vérifiez votre email ou contactez votre directeur.');
+    }
+  } catch (e) {
+    showErr('err-oubli', e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📩 Réinitialiser mon mot de passe';
+  }
+}
+
+window.addEventListener('DOMContentLoaded', async () => {
+  setTypeConnexion('membre');
+  setPremType('membre');
+  setOubliType('membre');
+  await redirectIfSessionExists();
+});
 </script>
 </body>
 </html>

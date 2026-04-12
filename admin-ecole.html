@@ -538,18 +538,42 @@ const SUPABASE_SERVICE_KEY = 'REMPLACER_PAR_SERVICE_ROLE_KEY';
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Crée un compte Auth confirmé d'emblée (pas de vérification email requise)
+// Crée un compte Auth sans basculer la session courante de l'admin école
 async function creerCompteConfirme(email, mdp) {
-  var res = await fetch(SUPABASE_URL + '/auth/v1/admin/users', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': SUPABASE_SERVICE_KEY,
-      'Authorization': 'Bearer ' + SUPABASE_SERVICE_KEY
-    },
-    body: JSON.stringify({ email: email, password: mdp, email_confirm: true })
-  });
-  return await res.json();
+  try {
+    const res = await fetch(SUPABASE_URL + '/auth/v1/signup', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY
+      },
+      body: JSON.stringify({
+        email: email,
+        password: mdp
+      })
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      return {
+        error:
+          json?.msg ||
+          json?.error_description ||
+          json?.error ||
+          'Erreur inconnue lors de la création du compte'
+      };
+    }
+
+    return {
+      user: json.user || json
+    };
+  } catch (e) {
+    return {
+      error: e.message || 'Erreur réseau lors de la création du compte'
+    };
+  }
 }
 
 let currentUser = null;
@@ -947,11 +971,18 @@ async function sauvegarderParent() {
   var emailInterne = genererEmail(mat, codeEcole);
   var mdpTemp = genererMotDePasse(mat);
 
-  // Créer compte Auth (confirmé d'emblée, pas de vérification email)
+  // Créer compte Auth
   var authRes = await creerCompteConfirme(emailInterne, mdpTemp);
+  if (authRes.error) {
+    showModalErr('Erreur création compte : ' + authRes.error);
+    return;
+  }
 
-  var authId = authRes.user ? authRes.user.id : (authRes.id || null);
-  if (!authId) { showModalErr('Erreur création compte : ' + (authRes.msg || authRes.message || authRes.error_description || JSON.stringify(authRes))); return; }
+  var authId = authRes.user ? authRes.user.id : null;
+  if (!authId) {
+    showModalErr('Erreur création compte : identifiant utilisateur introuvable.');
+    return;
+  }
 
   // Insérer dans utilisateurs
   var res = await db.from('utilisateurs').insert([{
@@ -1519,10 +1550,17 @@ async function sauvegarderProf() {
   var emailInterne = genererEmail(mat, codeEcole);
   var mdpTemp = genererMotDePasse(mat);
 
-  // Créer compte Auth (confirmé d'emblée, pas de vérification email)
+  // Créer compte Auth
   var authRes = await creerCompteConfirme(emailInterne, mdpTemp);
-  var authId = authRes.id || (authRes.user && authRes.user.id) || null;
-  if (!authId) { showModalErr('Erreur création compte : ' + (authRes.msg || authRes.message || authRes.error_description || JSON.stringify(authRes))); return; }
+  if (authRes.error) {
+    showModalErr('Erreur création compte : ' + authRes.error);
+    return;
+  }
+  var authId = authRes.user ? authRes.user.id : null;
+  if (!authId) {
+    showModalErr('Erreur création compte : identifiant utilisateur introuvable.');
+    return;
+  }
 
   // Insérer dans utilisateurs
   var res = await db.from('utilisateurs').insert([{
@@ -2587,12 +2625,16 @@ function fermerModal() { document.getElementById('modal-bg').classList.remove('o
   var emailInterne = genererEmail(mat, codeEcole);
   var mdpTemp = genererMotDePasse(mat);
 
-  // Créer le compte Supabase Auth (confirmé d'emblée, pas de vérification email)
+  // Créer le compte Supabase Auth
   var authRes = await creerCompteConfirme(emailInterne, mdpTemp);
+  if (authRes.error) {
+    showModalErr('Erreur création compte Auth : ' + authRes.error);
+    return;
+  }
 
-  var authId = authRes.user ? authRes.user.id : (authRes.id || null);
+  var authId = authRes.user ? authRes.user.id : null;
   if (!authId) {
-    showModalErr('Erreur création compte Auth : ' + (authRes.msg || authRes.message || authRes.error_description || JSON.stringify(authRes)));
+    showModalErr('Erreur création compte Auth : identifiant utilisateur introuvable.');
     return;
   }
 
@@ -2617,9 +2659,10 @@ function fermerModal() { document.getElementById('modal-bg').classList.remove('o
 
   // Créer aussi dans utilisateurs pour la connexion
   if (authId) {
-    await db.from('utilisateurs').insert([{
+    var resUser = await db.from('utilisateurs').insert([{
       id: authId,
-      nom: nom, prenom: prenom,
+      nom: nom,
+      prenom: prenom,
       role: 'eleve',
       ecole_id: ecoleId,
       actif: true,
@@ -2630,6 +2673,11 @@ function fermerModal() { document.getElementById('modal-bg').classList.remove('o
       mdp_temp: mdpTemp,
       premiere_connexion: true
     }]);
+
+    if (resUser.error) {
+      showModalErr('Compte Auth créé mais erreur profil utilisateur : ' + resUser.error.message);
+      return;
+    }
   }
 
   fermerModal();

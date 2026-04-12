@@ -438,8 +438,8 @@ if (userRoleEl) userRoleEl.textContent = 'Professeur';
   document.getElementById('appel-date').value = new Date().toISOString().split('T')[0];
   document.getElementById('h-date').value = new Date().toISOString().split('T')[0];
 
-  await chargerDashboard();
   await peuplerSelectClasses();
+await chargerDashboard();
 })();
 
 // ============================================
