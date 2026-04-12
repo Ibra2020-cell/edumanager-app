@@ -562,6 +562,25 @@ function isUUID(value) {
 }
 
 // ============================================
+// CHARGEMENT PROFIL PAR AUTH ID
+// ============================================
+
+async function chargerProfilUtilisateur(authUserId) {
+  const resId = await db.from('utilisateurs').select('*, ecoles(*)').eq('id', authUserId).maybeSingle();
+  if (resId.error) throw resId.error;
+  if (resId.data) return resId.data;
+  const resAuth = await db.from('utilisateurs').select('*, ecoles(*)').eq('auth_id', authUserId).maybeSingle();
+  if (resAuth.error) throw resAuth.error;
+  return resAuth.data || null;
+}
+
+function messageConnexion(err, fallback) {
+  if (!err) return fallback || 'Une erreur est survenue.';
+  const msg = (typeof err === 'string') ? err : (err.message || err.error_description || err.msg || err.error || '');
+  return msg || fallback || 'Une erreur est survenue.';
+}
+
+// ============================================
 // DEBUG
 // ============================================
 

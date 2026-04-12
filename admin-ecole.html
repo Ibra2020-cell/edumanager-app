@@ -998,9 +998,7 @@ async function sauvegarderParent() {
 
   // Générer matricule
   var { count } = await db.from('utilisateurs').select('id', { count: 'exact' }).eq('ecole_id', ecoleId).eq('role', 'parent');
-  var sexeParent = document.getElementById('m-sexe-parent')?.value || 'M';
-  var ddnParent = document.getElementById('m-ddn-parent')?.value || '';
-  var mat = genererMatriculeParent(nom, sexeParent, ddnParent, (count||0) + 1);
+  var mat = genererMatriculeParent(codeEcole, new Date().getFullYear(), (count||0) + 1);
   var emailInterne = genererEmail(mat, codeEcole);
   var mdpTemp = genererMotDePasse(mat);
 
@@ -1576,9 +1574,7 @@ async function sauvegarderProf() {
 
   // Générer matricule
   var { count } = await db.from('utilisateurs').select('id', { count: 'exact' }).eq('ecole_id', ecoleId).eq('role', 'professeur');
-  var sexeProf = document.getElementById('m-sexe-prof')?.value || 'M';
-  var ddnProf = document.getElementById('m-ddn-prof')?.value || '';
-  var mat = genererMatriculeProfesseur(nom, sexeProf, ddnProf, (count||0) + 1);
+  var mat = genererMatriculeProfesseur(codeEcole, new Date().getFullYear(), (count||0) + 1);
 
   var emailInterne = genererEmail(mat, codeEcole);
   var mdpTemp = genererMotDePasse(mat);
