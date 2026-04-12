@@ -752,7 +752,6 @@ async function doLogin() {
     btn.textContent = 'Se connecter';
   }
 }
-
 async function doPremiereConnexion() {
   hideMsg('err-premiere');
 
@@ -852,7 +851,7 @@ async function doPremiereConnexion() {
       ok.style.display = 'none';
     }, 2500);
   } catch (e) {
-    showErr('err-premiere', messageConnexion(e, 'Erreur lors de l\'activation du compte.'));
+    showErr('err-premiere', e?.message || 'Erreur lors de l\'activation du compte.');
   } finally {
     btn.disabled = false;
     btn.textContent = '🔐 Activer mon compte';
