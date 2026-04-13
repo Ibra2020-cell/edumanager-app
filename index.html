@@ -196,17 +196,12 @@
       <button id="btn-type-admin" onclick="setTypeConnexion('admin')" style="flex:1;padding:8px;border-radius:8px;border:2px solid #ddd;background:#fff;color:#888;font-size:12px;font-weight:600;cursor:pointer">🏫 Directeur / Admin</button>
     </div>
 
-    <!-- Formulaire membre (matricule) -->
+    <!-- Formulaire membre (email) -->
     <div id="login-membre">
       <div class="field">
-        <label>Matricule ✱</label>
-        <input type="text" id="l-matricule" placeholder="Ex : GN-2024-00123456" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')doLogin()"/>
-        <div class="field-note">📋 Matricule national fourni par votre directeur</div>
-      </div>
-      <div class="field">
-        <label>Code établissement ✱</label>
-        <input type="text" id="l-code" placeholder="Ex : LD-2026-642" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')doLogin()"/>
-        <div class="field-note">🏫 Code fourni par votre école</div>
+        <label>Adresse email ✱</label>
+        <input type="email" id="l-email" placeholder="votre.email@exemple.com" onkeydown="if(event.key==='Enter')doLogin()"/>
+        <div class="field-note">📧 Email enregistré par votre directeur</div>
       </div>
     </div>
 
@@ -249,12 +244,8 @@
   <!-- Champs membre -->
   <div id="prem-membre">
     <div class="field">
-      <label>Matricule</label>
-      <input id="p-matricule" type="text" placeholder="Ex : MA222222" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"/>
-    </div>
-    <div class="field">
-      <label>Code établissement</label>
-      <input id="p-code" type="text" placeholder="Ex : LD-2026-642" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"/>
+      <label>Adresse email</label>
+      <input id="p-email" type="email" placeholder="votre.email@exemple.com"/>
     </div>
   </div>
 
@@ -312,12 +303,8 @@
     <!-- Champs membre -->
     <div id="oubli-membre">
       <div class="field">
-        <label>Matricule</label>
-        <input id="o-matricule" type="text" placeholder="Ex : MA222222" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"/>
-      </div>
-      <div class="field">
-        <label>Code établissement</label>
-        <input id="o-code" type="text" placeholder="Ex : LD-2026-642" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"/>
+        <label>Adresse email</label>
+        <input id="o-email-membre" type="email" placeholder="votre.email@exemple.com"/>
       </div>
     </div>
 
@@ -348,7 +335,7 @@
       </div>
     </div>
     <div style="background:#f9f9f9;border-radius:8px;padding:10px 12px;font-size:11px;color:#888;margin-bottom:12px" id="oubli-note-membre">
-      ⚠️ Élève/Prof/Parent : entrez votre matricule et nouveau mot de passe souhaité.
+      📧 Un lien de réinitialisation sera envoyé à votre adresse email.
     </div>
     <button class="btn-login" onclick="demanderResetMdp()" style="width:100%">📩 Réinitialiser mon mot de passe</button>
   </div>
@@ -698,11 +685,10 @@ async function doLogin() {
   hideMsg('err-login');
   hideMsg('ok-login');
 
-  const matricule = document.getElementById('l-matricule').value.trim().toUpperCase();
-  const code = document.getElementById('l-code').value.trim().toUpperCase();
+  const email = document.getElementById('l-email').value.trim().toLowerCase();
   const mdp = document.getElementById('l-mdp').value;
 
-  if (!matricule || !code || !mdp) {
+  if (!email || !mdp) {
     return showErr('err-login', 'Veuillez remplir tous les champs.');
   }
 
@@ -711,7 +697,6 @@ async function doLogin() {
   btn.textContent = 'Connexion en cours...';
 
   try {
-    const email = buildInternalEmail(matricule, code);
 
     const { data, error } = await db.auth.signInWithPassword({
       email,
@@ -768,13 +753,12 @@ async function doPremiereConnexion() {
     }
     email = emailAdmin;
   } else {
-    const matricule = document.getElementById('p-matricule').value.trim().toUpperCase();
-    const code = document.getElementById('p-code').value.trim().toUpperCase();
+    const emailMembre = document.getElementById('p-email').value.trim().toLowerCase();
 
-    if (!matricule || !code || !mdpTemp || !mdpNew || !mdpConfirm) {
+    if (!emailMembre || !mdpTemp || !mdpNew || !mdpConfirm) {
       return showErr('err-premiere', 'Remplissez tous les champs.');
     }
-    email = buildInternalEmail(matricule, code);
+    email = emailMembre;
   }
 
   if (mdpNew !== mdpConfirm) {
@@ -798,9 +782,7 @@ async function doPremiereConnexion() {
 
     if (signInRes.error) {
       throw new Error(
-        _premType === 'admin'
-          ? 'Email ou mot de passe temporaire incorrect.'
-          : 'Matricule, code école ou mot de passe temporaire incorrect.'
+        'Email ou mot de passe temporaire incorrect.'
       );
     }
 
@@ -884,25 +866,21 @@ async function demanderResetMdp() {
 
       showOk('ok-oubli', '✅ Un lien de réinitialisation a été envoyé à ' + emailAdmin + '. Vérifiez votre boîte mail.');
     } else {
-      const matricule = document.getElementById('o-matricule').value.trim().toUpperCase();
-      const code = document.getElementById('o-code').value.trim().toUpperCase();
-      const mdpNew = document.getElementById('o-mdp-new').value;
-      const mdpConfirm = document.getElementById('o-mdp-confirm').value;
+      const emailMembre = document.getElementById('o-email-membre').value.trim().toLowerCase();
 
-      if (!matricule || !code || !mdpNew || !mdpConfirm) {
-        throw new Error('Remplissez tous les champs.');
+      if (!emailMembre) {
+        throw new Error('Entrez votre adresse email.');
       }
 
-      if (mdpNew !== mdpConfirm) {
-        throw new Error('Les mots de passe ne correspondent pas.');
+      const resReset = await db.auth.resetPasswordForEmail(emailMembre, {
+        redirectTo: window.location.origin + '/changer-mdp.html'
+      });
+
+      if (resReset.error) {
+        throw new Error('Email introuvable ou invalide.');
       }
 
-      const err = passwordError(mdpNew);
-      if (err) {
-        throw new Error(err);
-      }
-
-      throw new Error('Pour les comptes Élève / Parent / Professeur, la réinitialisation par email n\'est pas activée dans cette version. Demandez à votre école de vous redonner un mot de passe temporaire.');
+      showOk('ok-oubli', '✅ Un lien de réinitialisation a été envoyé à ' + emailMembre + '. Vérifiez votre boîte mail.');
     }
   } catch (e) {
     showErr('err-oubli', e.message);

@@ -999,7 +999,12 @@ async function sauvegarderParent() {
   // Générer matricule
   var { count } = await db.from('utilisateurs').select('id', { count: 'exact' }).eq('ecole_id', ecoleId).eq('role', 'parent');
   var mat = genererMatriculeParent(codeEcole, new Date().getFullYear(), (count||0) + 1);
-  var emailInterne = genererEmail(mat, codeEcole);
+
+  // Email réel fourni par le directeur
+  var emailInterne = (document.getElementById('m-email')?.value || '').trim().toLowerCase();
+  if (!emailInterne || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInterne)) {
+    showModalErr('Entrez une adresse email valide.'); return;
+  }
   var mdpTemp = genererMotDePasse(mat);
 
   // Créer compte Auth
@@ -1515,6 +1520,7 @@ async function genererModalProf() {
     '<div class="field"><label>Sexe ✱</label><select id="m-sexe-prof" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff"><option value="M">Masculin</option><option value="F">Féminin</option></select></div>' +
     '</div>' +
     '<div class="field"><label>Téléphone</label><input id="m-tel" type="tel" placeholder="620 000 000" maxlength="9"/></div>' +
+    '<div class="field"><label>Adresse email ✱</label><input id="m-email" type="email" placeholder="moussa.sylla@gmail.com"/><div style="font-size:11px;color:#aaa;margin-top:3px">Email réel — utilisé pour la connexion</div></div>' +
     '<div style="background:#f9f9f9;border-radius:8px;padding:10px 12px;margin-bottom:12px">' +
     '<div style="font-size:12px;font-weight:600;color:#555;margin-bottom:8px">📚 Assigner des cours (optionnel)</div>' +
     '<div style="display:flex;gap:8px;margin-bottom:6px">' +
@@ -1576,7 +1582,11 @@ async function sauvegarderProf() {
   var { count } = await db.from('utilisateurs').select('id', { count: 'exact' }).eq('ecole_id', ecoleId).eq('role', 'professeur');
   var mat = genererMatriculeProfesseur(codeEcole, new Date().getFullYear(), (count||0) + 1);
 
-  var emailInterne = genererEmail(mat, codeEcole);
+  // Email réel fourni par le directeur
+  var emailInterne = (document.getElementById('m-email')?.value || '').trim().toLowerCase();
+  if (!emailInterne || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInterne)) {
+    showModalErr('Entrez une adresse email valide.'); return;
+  }
   var mdpTemp = genererMotDePasse(mat);
 
   // Créer compte Auth
@@ -2490,6 +2500,11 @@ async function genererModalEleve() {
       <input id="m-tel" type="tel" placeholder="620 000 000" maxlength="9"/>
       <div style="font-size:11px;color:#aaa;margin-top:3px">9 chiffres sans l'indicatif +224</div>
     </div>
+    <div class="field">
+      <label>Adresse email ✱</label>
+      <input id="m-email" type="email" placeholder="mamadou.diallo@gmail.com"/>
+      <div style="font-size:11px;color:#aaa;margin-top:3px">Email réel — utilisé pour la connexion</div>
+    </div>
     <div class="modal-actions">
       <button class="btn" onclick="fermerModal()">Annuler</button>
       <button class="btn btn-primary" onclick="sauvegarderEleve()">✓ Ajouter et créer le compte</button>
@@ -2519,6 +2534,7 @@ async function genererModalEleve() {
     '<div class="field"><label>Sexe ✱</label><select id="m-sexe-parent" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff"><option value="M">Masculin</option><option value="F">Féminin</option></select></div>' +
     '</div>' +
     '<div class="field"><label>Téléphone ✱</label><input id="m-tel" type="tel" placeholder="620 000 000" maxlength="9"/></div>' +
+    '<div class="field"><label>Adresse email ✱</label><input id="m-email" type="email" placeholder="sita.sanoh@gmail.com"/><div style="font-size:11px;color:#aaa;margin-top:3px">Email réel — utilisé pour la connexion</div></div>' +
     '<div style="background:#f9f9f9;border-radius:8px;padding:10px 12px;margin-bottom:12px">' +
     '<div style="font-size:12px;font-weight:600;color:#555;margin-bottom:8px">👶 Rattacher des enfants (optionnel)</div>' +
     '<input id="m-enfant-search" type="text" placeholder="Filtrer par nom ou matricule..." oninput="filtrerEnfantsSelect()" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:12px;margin-bottom:6px"/>' +
@@ -2649,8 +2665,11 @@ function fermerModal() { document.getElementById('modal-bg').classList.remove('o
     if (resEcole.data) codeEcole = resEcole.data.code_acces;
   }
 
-  // Générer email interne et mot de passe temporaire
-  var emailInterne = genererEmail(mat, codeEcole);
+  // Email réel fourni par le directeur
+  var emailInterne = (document.getElementById('m-email')?.value || '').trim().toLowerCase();
+  if (!emailInterne || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInterne)) {
+    showModalErr('Entrez une adresse email valide.'); return;
+  }
   var mdpTemp = genererMotDePasse(mat);
 
   // Créer le compte Supabase Auth
@@ -2716,6 +2735,30 @@ function fermerModal() { document.getElementById('modal-bg').classList.remove('o
   fermerModal();
   afficherIdentifiants(prenom + ' ' + nom, mat, mdpTemp, 'eleve');
   chargerEleves();
+}
+
+function afficherIdentifiants(nomComplet, mat, mdpTemp, role) {
+  var roleLabel = { eleve: 'Élève', professeur: 'Professeur', parent: 'Parent' }[role] || role;
+  document.getElementById('modal-content').innerHTML =
+    '<div class="modal-title">✅ Compte créé — ' + roleLabel + '</div>' +
+    '<div style="background:#E6F5ED;border:1px solid #A8DFC9;border-radius:10px;padding:16px;margin-bottom:14px">' +
+    '<div style="font-size:13px;font-weight:600;color:#085041;margin-bottom:14px">' + nomComplet + '</div>' +
+    '<div style="display:flex;flex-direction:column;gap:10px">' +
+    '<div style="background:#fff;border-radius:8px;padding:12px 14px;border:1px solid #e0e0e0">' +
+    '<div style="font-size:10px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:5px">Mot de passe temporaire</div>' +
+    '<div style="font-family:monospace;font-size:20px;font-weight:700;color:#0C447C;letter-spacing:2px">' + mdpTemp + '</div>' +
+    '</div>' +
+    '<div style="background:#fff;border-radius:8px;padding:12px 14px;border:1px solid #e0e0e0">' +
+    '<div style="font-size:10px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:5px">Code école</div>' +
+    '<div style="font-family:monospace;font-size:20px;font-weight:700;color:#0C447C;letter-spacing:2px">' + codeEcole + '</div>' +
+    '</div>' +
+    '</div>' +
+    '</div>' +
+    '<div style="font-size:12px;color:#888;margin-bottom:16px;padding:10px;background:#fff8e6;border-radius:8px;border-left:3px solid #EF9F27">' +
+    '⚠️ Transmettez ce mot de passe et le code école à la personne. Elle devra changer son mot de passe lors de sa première connexion.' +
+    '</div>' +
+    '<div class="modal-actions"><button class="btn btn-primary" onclick="fermerModal()">Fermer</button></div>';
+  document.getElementById('modal-bg').classList.add('open');
 }
 
 async function sauvegarderClasse() {
