@@ -1520,7 +1520,7 @@ async function genererModalProf() {
     '<div class="field"><label>Sexe ✱</label><select id="m-sexe-prof" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff"><option value="M">Masculin</option><option value="F">Féminin</option></select></div>' +
     '</div>' +
     '<div class="field"><label>Téléphone</label><input id="m-tel" type="tel" placeholder="620 000 000" maxlength="9"/></div>' +
-    '<div class="field"><label>Adresse email ✱</label><input id="m-email" type="email" placeholder="moussa.sylla@gmail.com"/><div style="font-size:11px;color:#aaa;margin-top:3px">Email réel — utilisé pour la connexion</div></div>' +
+    '<div class="field"><label>Adresse email ✱</label><input id="m-email" type="email" placeholder="moussa.sylla@gmail.com"/><div style="font-size:11px;color:#aaa;margin-top:3px">Email réel — utilisé pour la récupération du compte et les notifications</div></div>' +
     '<div style="background:#f9f9f9;border-radius:8px;padding:10px 12px;margin-bottom:12px">' +
     '<div style="font-size:12px;font-weight:600;color:#555;margin-bottom:8px">📚 Assigner des cours (optionnel)</div>' +
     '<div style="display:flex;gap:8px;margin-bottom:6px">' +
@@ -2503,7 +2503,7 @@ async function genererModalEleve() {
     <div class="field">
       <label>Adresse email ✱</label>
       <input id="m-email" type="email" placeholder="mamadou.diallo@gmail.com"/>
-      <div style="font-size:11px;color:#aaa;margin-top:3px">Email réel — utilisé pour la connexion</div>
+      <div style="font-size:11px;color:#aaa;margin-top:3px">Email réel — utilisé pour la récupération du compte et les notifications</div>
     </div>
     <div class="modal-actions">
       <button class="btn" onclick="fermerModal()">Annuler</button>
@@ -2534,7 +2534,7 @@ async function genererModalEleve() {
     '<div class="field"><label>Sexe ✱</label><select id="m-sexe-parent" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff"><option value="M">Masculin</option><option value="F">Féminin</option></select></div>' +
     '</div>' +
     '<div class="field"><label>Téléphone ✱</label><input id="m-tel" type="tel" placeholder="620 000 000" maxlength="9"/></div>' +
-    '<div class="field"><label>Adresse email ✱</label><input id="m-email" type="email" placeholder="sita.sanoh@gmail.com"/><div style="font-size:11px;color:#aaa;margin-top:3px">Email réel — utilisé pour la connexion</div></div>' +
+    '<div class="field"><label>Adresse email ✱</label><input id="m-email" type="email" placeholder="sita.sanoh@gmail.com"/><div style="font-size:11px;color:#aaa;margin-top:3px">Email réel — utilisé pour la récupération du compte et les notifications</div></div>' +
     '<div style="background:#f9f9f9;border-radius:8px;padding:10px 12px;margin-bottom:12px">' +
     '<div style="font-size:12px;font-weight:600;color:#555;margin-bottom:8px">👶 Rattacher des enfants (optionnel)</div>' +
     '<input id="m-enfant-search" type="text" placeholder="Filtrer par nom ou matricule..." oninput="filtrerEnfantsSelect()" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:12px;margin-bottom:6px"/>' +
@@ -2745,6 +2745,10 @@ function afficherIdentifiants(nomComplet, mat, mdpTemp, role) {
     '<div style="font-size:13px;font-weight:600;color:#085041;margin-bottom:14px">' + nomComplet + '</div>' +
     '<div style="display:flex;flex-direction:column;gap:10px">' +
     '<div style="background:#fff;border-radius:8px;padding:12px 14px;border:1px solid #e0e0e0">' +
+    '<div style="font-size:10px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:5px">Matricule de connexion</div>' +
+    '<div style="font-family:monospace;font-size:20px;font-weight:700;color:#0C447C;letter-spacing:1px">' + mat + '</div>' +
+    '</div>' +
+    '<div style="background:#fff;border-radius:8px;padding:12px 14px;border:1px solid #e0e0e0">' +
     '<div style="font-size:10px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:5px">Mot de passe temporaire</div>' +
     '<div style="font-family:monospace;font-size:20px;font-weight:700;color:#0C447C;letter-spacing:2px">' + mdpTemp + '</div>' +
     '</div>' +
@@ -2755,7 +2759,7 @@ function afficherIdentifiants(nomComplet, mat, mdpTemp, role) {
     '</div>' +
     '</div>' +
     '<div style="font-size:12px;color:#888;margin-bottom:16px;padding:10px;background:#fff8e6;border-radius:8px;border-left:3px solid #EF9F27">' +
-    '⚠️ Transmettez ce mot de passe et le code école à la personne. Elle devra changer son mot de passe lors de sa première connexion.' +
+    '⚠️ Transmettez le matricule, le code école et le mot de passe temporaire. La personne devra changer son mot de passe lors de sa première connexion.' +
     '</div>' +
     '<div class="modal-actions"><button class="btn btn-primary" onclick="fermerModal()">Fermer</button></div>';
   document.getElementById('modal-bg').classList.add('open');

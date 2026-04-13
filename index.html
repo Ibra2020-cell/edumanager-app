@@ -199,9 +199,14 @@
     <!-- Formulaire membre (email) -->
     <div id="login-membre">
       <div class="field">
-        <label>Adresse email ✱</label>
-        <input type="email" id="l-email" placeholder="votre.email@exemple.com" onkeydown="if(event.key==='Enter')doLogin()"/>
-        <div class="field-note">📧 Email enregistré par votre directeur</div>
+        <label>Matricule ✱</label>
+        <input type="text" id="l-matricule" placeholder="Ex: GN-2024-00123456 ou PRF-ABC-26-001" onkeydown="if(event.key==='Enter')loginDispatch()"/>
+        <div class="field-note">👤 Identifiant remis par votre école</div>
+      </div>
+      <div class="field">
+        <label>Code école ✱</label>
+        <input type="text" id="l-code-ecole" placeholder="Ex: ECO-2026-123" onkeydown="if(event.key==='Enter')loginDispatch()"/>
+        <div class="field-note">🏫 Chaque école possède son propre espace</div>
       </div>
     </div>
 
@@ -244,8 +249,12 @@
   <!-- Champs membre -->
   <div id="prem-membre">
     <div class="field">
-      <label>Adresse email</label>
-      <input id="p-email" type="email" placeholder="votre.email@exemple.com"/>
+      <label>Matricule</label>
+      <input id="p-matricule" type="text" placeholder="Votre matricule"/>
+    </div>
+    <div class="field">
+      <label>Code école</label>
+      <input id="p-code-ecole" type="text" placeholder="Code remis par l'école"/>
     </div>
   </div>
 
@@ -303,8 +312,12 @@
     <!-- Champs membre -->
     <div id="oubli-membre">
       <div class="field">
-        <label>Adresse email</label>
-        <input id="o-email-membre" type="email" placeholder="votre.email@exemple.com"/>
+        <label>Matricule</label>
+        <input id="o-matricule-membre" type="text" placeholder="Votre matricule"/>
+      </div>
+      <div class="field">
+        <label>Code école</label>
+        <input id="o-code-ecole-membre" type="text" placeholder="Code remis par l'école"/>
       </div>
     </div>
 
@@ -335,7 +348,7 @@
       </div>
     </div>
     <div style="background:#f9f9f9;border-radius:8px;padding:10px 12px;font-size:11px;color:#888;margin-bottom:12px" id="oubli-note-membre">
-      📧 Un lien de réinitialisation sera envoyé à votre adresse email.
+      🏫 Entrez votre matricule et le code de votre école. Le lien sera envoyé à l'adresse enregistrée sur votre compte.
     </div>
     <button class="btn-login" onclick="demanderResetMdp()" style="width:100%">📩 Réinitialiser mon mot de passe</button>
   </div>
@@ -359,10 +372,49 @@ function normalizeMemberPart(value) {
   return (value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').toLowerCase();
 }
 
+function normalizeMatricule(value) {
+  return (value || '').trim().toUpperCase().replace(/\s+/g, '');
+}
+
+function normalizeSchoolCode(value) {
+  return (value || '').trim().toUpperCase().replace(/\s+/g, '');
+}
+
 function buildInternalEmail(matricule, code) {
   const left = normalizeMemberPart(matricule);
   const right = normalizeMemberPart(code);
   return `${left}@${right}.gn`;
+}
+
+async function resolveMemberAccess(matricule, codeEcole) {
+  const matriculeNormalise = normalizeMatricule(matricule);
+  const codeNormalise = normalizeSchoolCode(codeEcole);
+
+  if (!matriculeNormalise || !codeNormalise) {
+    throw new Error('Matricule et code école obligatoires.');
+  }
+
+  const { data, error } = await db
+    .from('utilisateurs')
+    .select('id, auth_id, email, role, premiere_connexion, ecole_id, ecoles!inner(code_acces, nom)')
+    .eq('numero_matricule', matriculeNormalise)
+    .eq('ecoles.code_acces', codeNormalise)
+    .in('role', ['eleve', 'professeur', 'parent'])
+    .maybeSingle();
+
+  if (error) {
+    throw new Error('Impossible de vérifier votre école pour le moment.');
+  }
+
+  if (!data) {
+    throw new Error('Matricule ou code école incorrect.');
+  }
+
+  if (!data.email) {
+    throw new Error('Compte incomplet. Contactez votre directeur.');
+  }
+
+  return data;
 }
 
 function passwordError(password) {
@@ -685,10 +737,11 @@ async function doLogin() {
   hideMsg('err-login');
   hideMsg('ok-login');
 
-  const email = document.getElementById('l-email').value.trim().toLowerCase();
+  const matricule = document.getElementById('l-matricule').value;
+  const codeEcole = document.getElementById('l-code-ecole').value;
   const mdp = document.getElementById('l-mdp').value;
 
-  if (!email || !mdp) {
+  if (!matricule || !codeEcole || !mdp) {
     return showErr('err-login', 'Veuillez remplir tous les champs.');
   }
 
@@ -697,6 +750,8 @@ async function doLogin() {
   btn.textContent = 'Connexion en cours...';
 
   try {
+    const access = await resolveMemberAccess(matricule, codeEcole);
+    const email = String(access.email || '').trim().toLowerCase();
 
     const { data, error } = await db.auth.signInWithPassword({
       email,
@@ -753,12 +808,14 @@ async function doPremiereConnexion() {
     }
     email = emailAdmin;
   } else {
-    const emailMembre = document.getElementById('p-email').value.trim().toLowerCase();
+    const matricule = document.getElementById('p-matricule').value;
+    const codeEcole = document.getElementById('p-code-ecole').value;
 
-    if (!emailMembre || !mdpTemp || !mdpNew || !mdpConfirm) {
+    if (!matricule || !codeEcole || !mdpTemp || !mdpNew || !mdpConfirm) {
       return showErr('err-premiere', 'Remplissez tous les champs.');
     }
-    email = emailMembre;
+    const access = await resolveMemberAccess(matricule, codeEcole);
+    email = String(access.email || '').trim().toLowerCase();
   }
 
   if (mdpNew !== mdpConfirm) {
@@ -866,11 +923,15 @@ async function demanderResetMdp() {
 
       showOk('ok-oubli', '✅ Un lien de réinitialisation a été envoyé à ' + emailAdmin + '. Vérifiez votre boîte mail.');
     } else {
-      const emailMembre = document.getElementById('o-email-membre').value.trim().toLowerCase();
+      const matricule = document.getElementById('o-matricule-membre').value;
+      const codeEcole = document.getElementById('o-code-ecole-membre').value;
 
-      if (!emailMembre) {
-        throw new Error('Entrez votre adresse email.');
+      if (!matricule || !codeEcole) {
+        throw new Error('Entrez votre matricule et votre code école.');
       }
+
+      const access = await resolveMemberAccess(matricule, codeEcole);
+      const emailMembre = String(access.email || '').trim().toLowerCase();
 
       const resReset = await db.auth.resetPasswordForEmail(emailMembre, {
         redirectTo: window.location.origin + '/changer-mdp.html'
@@ -880,7 +941,7 @@ async function demanderResetMdp() {
         throw new Error('Email introuvable ou invalide.');
       }
 
-      showOk('ok-oubli', '✅ Un lien de réinitialisation a été envoyé à ' + emailMembre + '. Vérifiez votre boîte mail.');
+      showOk('ok-oubli', '✅ Un lien de réinitialisation a été envoyé à l’adresse enregistrée pour ce compte. Vérifiez votre boîte mail.');
     }
   } catch (e) {
     showErr('err-oubli', e.message);
